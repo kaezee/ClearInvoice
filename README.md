@@ -1,1 +1,11 @@
-# repo-template
+
+  # Clear Invoice
+
+  This is a code bundle for Clear Invoice. The original project is available at https://www.figma.com/design/uUwqkHBwGn912uOg2xs7QW/Clear-Invoice.
+
+  ## Running the code
+
+  Run `npm i` to install the dependencies.
+
+  Run `npm run dev` to start the development server.
+  

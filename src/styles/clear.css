@@ -1,0 +1,75 @@
+:root {
+  --c-black: #0A0A0A;
+  --c-white: #FFFFFF;
+  --c-surface: #F5F6F8;
+  --c-card: #FFFFFF;
+  --c-border: #E2E5EC;
+  --c-border-strong: #C4C4C4;
+  --c-muted: #7A8099;
+  --c-hint: #C4C4C4;
+  --c-violet: #7C3AED;
+  --c-danger: #DC2626;
+  --c-quoting: #FFE24B;
+  --c-in-progress: #FF659C;
+  --c-invoiced: #65F7FF;
+  --c-cleared: #4DFF91;
+}
+
+* {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--c-surface);
+  margin: 0;
+  overflow-x: hidden;
+}
+
+html {
+  overflow-x: hidden;
+}
+
+/* Focus outlines use black, not violet */
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid #0A0A0A;
+  outline-offset: 3px;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+}
+
+/* ── Input design system (class "ci") ──────────────────── */
+/* Apply className="ci" to inputs/textareas/selects        */
+
+.ci::placeholder {
+  color: #C4C4C4 !important;
+}
+
+.ci:hover:not(:focus):not(:disabled) {
+  border-color: #C4C4C4 !important;
+}
+
+.ci:focus {
+  border-color: #0A0A0A !important;
+  border-width: 1.5px !important;
+  outline: none !important;
+}
+
+.ci:disabled {
+  background: #F5F6F8 !important;
+  border-color: #E2E5EC !important;
+  color: #7A8099 !important;
+  cursor: not-allowed !important;
+}
+
+::-webkit-scrollbar {
+  display: none;
+}
+
+scrollbar-width: none;
