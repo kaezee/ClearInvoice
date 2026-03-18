@@ -2,6 +2,7 @@ import React from 'react';
 import { useParams } from 'react-router';
 import { useApp } from '../store';
 import { formatAmount, formatDate } from '../tokens';
+import { PAGE_WRAP, CARD_WRAP, SECTION_LABEL } from '../components/clientPage';
 
 /* ─────────────────────────────────────────────────────────
    Client-facing Quote Page  ·  Classic template
@@ -180,7 +181,7 @@ export default function ClientQuotePage() {
           <div style={{ marginTop: 16 }}>
             <div style={SECTION_LABEL}>To proceed</div>
             <div style={{ fontSize: 13, color: '#0A0A0A', lineHeight: 1.6, marginTop: 6 }}>
-              {project.quoteNotes ?? project.invoiceNotes ?? 'Reply to confirm and work begins immediately.'}
+              {project.quoteNotes ?? 'Reply to confirm and work begins.'}
             </div>
           </div>
 
@@ -208,32 +209,3 @@ export default function ClientQuotePage() {
     </div>
   );
 }
-
-/* ── Layout constants ────────────────────────────────────── */
-const PAGE_WRAP: React.CSSProperties = {
-  background: '#F5F6F8',
-  minHeight: '100vh',
-  fontFamily: 'DM Sans, sans-serif',
-  display: 'flex',
-  justifyContent: 'center',
-  padding: '0 0 40px',
-};
-
-const CARD_WRAP: React.CSSProperties = {
-  width: '100%',
-  maxWidth: 480,
-  minHeight: '100vh',
-  background: '#FFFFFF',
-  display: 'flex',
-  flexDirection: 'column',
-  // Desktop: card with border
-  boxShadow: '0 0 0 1px rgba(0,0,0,0.06), 0 8px 40px rgba(0,0,0,0.08)',
-};
-
-const SECTION_LABEL: React.CSSProperties = {
-  fontSize: 10,
-  fontWeight: 600,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
-  color: '#7A8099',
-};

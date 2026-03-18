@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useApp } from '../store';
-import { C, T } from '../tokens';
+import { C, T, CURRENCIES, currSym } from '../tokens';
 
 /* ── Clear logo SVG ─────────────────────────────────────── */
 const ClearLogo = ({ height = 26, dark = false }: { height?: number; dark?: boolean }) => (
@@ -76,16 +76,6 @@ function CtaButton({ label, onClick, dark = false, disabled = false }: {
     </button>
   );
 }
-
-/* ── Currency options with symbols ─────────────────────── */
-const CURRENCIES = [
-  { code: 'GBP', symbol: '£', label: '£  GBP — British Pound' },
-  { code: 'USD', symbol: '$', label: '$  USD — US Dollar' },
-  { code: 'EUR', symbol: '€', label: '€  EUR — Euro' },
-  { code: 'INR', symbol: '₹', label: '₹  INR — Indian Rupee' },
-  { code: 'AUD', symbol: 'A$', label: 'A$  AUD — Australian Dollar' },
-  { code: 'CAD', symbol: 'C$', label: 'C$  CAD — Canadian Dollar' },
-];
 
 /* ── O1: Welcome (dark, big logo hero) ──────────────────── */
 function O1Welcome() {
@@ -297,7 +287,7 @@ function O4Details() {
               style={{ ...inputStyle, cursor: 'pointer', appearance: 'none' as any }}
             >
               {CURRENCIES.map(c => (
-                <option key={c.code} value={c.code}>{c.label}</option>
+                <option key={c} value={c}>{currSym(c)}  {c}</option>
               ))}
             </select>
           </div>

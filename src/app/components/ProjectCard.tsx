@@ -350,8 +350,6 @@ export function ProjectCard({
                 let all: string[];
                 if (project.services?.length) {
                   all = project.services.map(s => s.name);
-                } else if (project.categories?.length) {
-                  all = project.categories;
                 } else if (project.type) {
                   all = [project.type];
                 } else {

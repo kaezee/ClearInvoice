@@ -35,10 +35,9 @@ function matchesSearch(q: string) {
 let _pendingSheetView: 'menu' | 'archived' = 'menu';
 
 export default function ProjectList() {
-  const { projects, advanceStatus, updateProject, deleteProject, isOverdue, archiveProject } = useApp();
+  const { projects, advanceStatus, updateProject, deleteProject, isOverdue, archiveProject, branding } = useApp();
   const navigate = useNavigate();
 
-  const { branding } = useApp();
   const avatarInitial = (branding.freelancerName || branding.businessName || 'K')[0].toUpperCase();
 
   // Tab is persisted in sessionStorage so it survives the unmount/remount that
@@ -417,7 +416,6 @@ export default function ProjectList() {
         description="This means the invoice has been paid and everything is wrapped up."
         confirmLabel="Yes, clear it"
         confirmBg={C.cleared}
-        confirmTextColor={C.black}
         confirmIcon={<CheckCircle2 size={15} />}
         onConfirm={handleConfirmClear}
       />

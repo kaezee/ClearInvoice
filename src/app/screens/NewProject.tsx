@@ -3,22 +3,17 @@ import { useNavigate } from 'react-router';
 import { X, ChevronDown } from 'lucide-react';
 import { DarkNavBtn } from '../components/ui/CircleIconBtn';
 import { useApp } from '../store';
-import { C, T, R } from '../tokens';
+import { C, T, R, CURRENCIES, currSym } from '../tokens';
 import { Btn } from '../components/ui/Btn';
 import { NumberInput } from '../components/ui/NumberInput';
 import { ServicesSection, ServiceItem } from '../components/ui/ServicesSection';
 import { Contact } from '../types';
-
-const CURRENCIES = ['GBP', 'USD', 'EUR', 'INR', 'AUD', 'CAD'];
 
 const DUE_QUICK: { label: string; days: number }[] = [
   { label: '7 days',  days: 7  },
   { label: '14 days', days: 14 },
   { label: '30 days', days: 30 },
 ];
-
-const currencySymbol = (c: string) =>
-  c === 'GBP' ? '£' : c === 'USD' ? '$' : c === 'EUR' ? '€' : c === 'INR' ? '₹' : c;
 
 /* ── Field wrapper ─────────────────────────────────────────── */
 function Field({
@@ -97,7 +92,7 @@ export default function NewProject() {
   const [errors, setErrors]           = useState<Record<string, string>>({});
 
   const isValid = clientName.trim().length > 0 && services.length > 0;
-  const sym     = currencySymbol(currency);
+  const sym     = currSym(currency);
 
   /* Derived: service total to compare against quoted amount */
   const serviceTotal = services.reduce((sum, s) => sum + s.price, 0);

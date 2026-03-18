@@ -14,7 +14,6 @@ interface ConfirmModalProps {
   confirmLabel: string;
   /** Pass C.danger for destructive, C.cleared for positive, or C.black for primary */
   confirmBg: string;
-  confirmTextColor?: string;
   confirmIcon?: React.ReactNode;
   onConfirm: () => void;
 }

@@ -11,7 +11,6 @@ interface QuoteSectionProps {
 
 export function QuoteSection({ project, onUpdate }: QuoteSectionProps) {
   const [editingField, setEditingField] = useState<string | null>(null);
-  const [showHint, setShowHint] = useState(true);
 
   const quoteRef = (() => {
     const v = project.quoteVersion ?? 1;
@@ -23,7 +22,6 @@ export function QuoteSection({ project, onUpdate }: QuoteSectionProps) {
       item.id === id ? { ...item, [field]: field === 'amount' ? Number(value) : value } : item
     );
     onUpdate({ invoiceItems: updated });
-    setShowHint(false);
   };
 
   const addItem = () => {
@@ -224,7 +222,6 @@ export function QuoteSection({ project, onUpdate }: QuoteSectionProps) {
               onBlur={(e) => {
                 onUpdate({ quoteNotes: e.target.value });
                 setEditingField(null);
-                setShowHint(false);
               }}
               style={{
                 width: '100%', fontSize: '11px', lineHeight: 1.6,
@@ -250,22 +247,14 @@ export function QuoteSection({ project, onUpdate }: QuoteSectionProps) {
         </div>
 
         {/* Edit hint */}
-        {showHint && (
-          <button
-            onClick={() => setShowHint(false)}
-            onMouseEnter={e => (e.currentTarget.style.color = C.black)}
-            onMouseLeave={e => (e.currentTarget.style.color = C.muted)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 4,
-              marginTop: 10, background: 'none', border: 'none',
-              cursor: 'pointer', padding: 0,
-              fontSize: '11px', color: C.muted, transition: 'color 150ms',
-            }}
-          >
-            <Pencil size={10} />
-            Tap underlined fields to edit
-          </button>
-        )}
+        <p style={{
+          display: 'flex', alignItems: 'center', gap: 4,
+          marginTop: 10, padding: 0,
+          fontSize: '11px', color: C.muted,
+        }}>
+          <Pencil size={10} />
+          Tap underlined fields to edit
+        </p>
       </div>
     </motion.div>
   );

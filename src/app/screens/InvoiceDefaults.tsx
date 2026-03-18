@@ -3,18 +3,12 @@ import { useNavigate } from 'react-router';
 import { ChevronLeft, Plus, X, ChevronDown, ImageIcon, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../store';
-import { C, T, R } from '../tokens';
-import { InvoiceDefaultsType, RateCardItem, CustomField, PaymentTerms } from '../types';
+import { C, T, R, CURRENCIES, currSym, PAYMENT_TERMS } from '../tokens';
+import { InvoiceDefaultsType, RateCardItem, CustomField } from '../types';
 import { NumberInput } from '../components/ui/NumberInput';
 import { DarkNavBtn, LightModalBtn } from '../components/ui/CircleIconBtn';
 
-const CURRENCIES = ['GBP', 'USD', 'EUR', 'INR', 'AUD', 'CAD'];
-const TERMS: { key: PaymentTerms; label: string }[] = [
-  { key: 'net7',   label: '7 days'  },
-  { key: 'net14',  label: '14 days' },
-  { key: 'net30',  label: '30 days' },
-  { key: 'custom', label: 'Custom'  },
-];
+
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -260,13 +254,6 @@ export default function InvoiceDefaults() {
     height: 44, width: '100%', boxSizing: 'border-box',
     transition: 'border-color 150ms',
   };
-
-  const currencySymbol =
-    defaults.defaultCurrency === 'GBP' ? '£' :
-    defaults.defaultCurrency === 'USD' ? '$' :
-    defaults.defaultCurrency === 'EUR' ? '€' :
-    defaults.defaultCurrency === 'INR' ? '₹' :
-    defaults.defaultCurrency;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', position: 'relative', overflow: 'hidden', background: C.surface }}>
@@ -608,7 +595,7 @@ export default function InvoiceDefaults() {
                 <span style={{ fontSize: '13px', fontWeight: 500, color: C.black, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 8 }}>{item.service}</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                   <span style={{ fontSize: '13px', fontWeight: 600, color: C.black }}>
-                    {currencySymbol}{item.price.toLocaleString()}
+                    {currSym(defaults.defaultCurrency ?? 'GBP')}{item.price.toLocaleString()}
                   </span>
                   <button
                     onClick={() => removeRateItem(item.id)}
@@ -636,7 +623,7 @@ export default function InvoiceDefaults() {
                 Default due terms
               </label>
               <div style={{ display: 'flex', gap: 6 }}>
-                {TERMS.map(t => {
+                {PAYMENT_TERMS.map(t => {
                   const active = defaults.defaultTerms === t.key;
                   return (
                     <button

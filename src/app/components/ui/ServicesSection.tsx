@@ -147,7 +147,7 @@ export function ServicesSection({
     onChange([...services, {
       id: `rc-${item.id}-${Date.now()}`,
       name: item.service, price: item.price,
-      fromRateCard: true, rateCardId: item.id,
+      rateCardId: item.id,
     }]);
   };
 

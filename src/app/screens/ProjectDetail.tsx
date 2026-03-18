@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { ChevronLeft, Check, Trash2, Send, FileText, CheckCircle2, Link, Calendar, X } from 'lucide-react';
 import { DarkNavBtn } from '../components/ui/CircleIconBtn';
+import { Btn } from '../components/ui/Btn';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../store';
-import { C, T, R, STATUS_FILL, formatAmount, formatDate } from '../tokens';
+import { C, T, R, STATUS_FILL, formatAmount, formatDate, CURRENCIES, currSym } from '../tokens';
 import { StatusPill } from '../components/StatusPill';
 import { BottomSheet } from '../components/BottomSheet';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -34,14 +35,6 @@ const LOCK_NOTES: Record<string, Record<string, string>> = {
     dueDate: 'Due date is set on the invoice',
   },
 };
-
-const CURRENCIES = ['GBP', 'USD', 'EUR', 'INR', 'AUD', 'CAD'];
-const EDIT_CURRENCIES = ['GBP', 'USD', 'EUR', 'INR'];
-
-function currSym(c: string): string {
-  const m: Record<string, string> = { GBP: '£', USD: '$', EUR: '€', INR: '₹', AUD: 'A$', CAD: 'C$' };
-  return m[c] || c;
-}
 
 /* ── Time-ago helper ────────────────────────────────────── */
 function timeAgo(iso: string): string {
@@ -164,7 +157,7 @@ function EditableRow({
           onFocus={e => (e.currentTarget.style.borderBottomColor = C.black)}
           onBlur={e  => (e.currentTarget.style.borderBottomColor = C.border)}
         >
-          {EDIT_CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+          {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
       ) : (
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -542,7 +535,9 @@ export default function ProjectDetail() {
         {editMode ? (
           <>
             {/* Cancel */}
-            <NavCancelBtn onClick={cancelEdit} />
+            <Btn variant="ghost" size="sm" onClick={cancelEdit}
+              style={{ color: C.white, padding: '0 4px', height: 44, borderRadius: R.md }}
+            >Cancel</Btn>
 
             {/* Centre title */}
             <span style={{
@@ -554,7 +549,9 @@ export default function ProjectDetail() {
             </span>
 
             {/* Save */}
-            <NavSaveBtn onClick={handleSave} disabled={!hasChanges} />
+            <Btn variant="ghost" size="sm" onClick={handleSave} disabled={!hasChanges}
+              style={{ color: C.white, padding: '0 4px', height: 44, borderRadius: R.md, justifyContent: 'flex-end' }}
+            >Save</Btn>
           </>
         ) : (
           <>
@@ -1006,52 +1003,54 @@ export default function ProjectDetail() {
               <>
                 {/* Revise quote — only on QUOTE · SENT, not Draft/Accepted */}
                 {project.sentAt && !project.viewedAt && (
-                  <SecondaryBtn onClick={handleReviseQuote}>Revise quote →</SecondaryBtn>
+                  <Btn variant="secondary" fullWidth onClick={handleReviseQuote}>Revise quote →</Btn>
                 )}
                 <div style={{ display: 'flex', gap: 8 }}>
                   {!project.sentAt
-                    ? <AccentBtn fill={C.quoting} onClick={handleSendQuote} flex><Send size={15} /> Send to client →</AccentBtn>
-                    : <SecondaryBtn onClick={handleSendQuote} flex><Send size={15} /> Resend quote</SecondaryBtn>
+                    ? <Btn variant="accent-yellow" style={{ flex: 1 }} onClick={handleSendQuote}><Send size={15} /> Send to client →</Btn>
+                    : <Btn variant="secondary" style={{ flex: 1 }} onClick={handleSendQuote}><Send size={15} /> Resend quote</Btn>
                   }
                   {project.sentAt && (
-                    <IconBtn onClick={() => copyLink('quote')} title="Copy quote link" ariaLabel="Copy quote link">
+                    <Btn variant="secondary" style={{ width: 48, height: 48, flexShrink: 0, padding: 0 }}
+                      onClick={() => copyLink('quote')} title="Copy quote link" aria-label="Copy quote link">
                       {copied === 'quote' ? <Check size={16} /> : <Link size={16} />}
-                    </IconBtn>
+                    </Btn>
                   )}
                 </div>
-                <PrimaryBtn onClick={handleMarkQuoteAccepted}>
+                <Btn variant="primary" fullWidth onClick={handleMarkQuoteAccepted}>
                   <CheckCircle2 size={15} /> Mark quote accepted →
-                </PrimaryBtn>
+                </Btn>
               </>
             )}
 
             {/* In progress stage */}
             {project.status === 'in-progress' && (
-              <PrimaryBtn onClick={handleGenerateInvoice}>
+              <Btn variant="primary" fullWidth onClick={handleGenerateInvoice}>
                 <FileText size={15} /> Generate invoice →
-              </PrimaryBtn>
+              </Btn>
             )}
 
             {/* Invoiced stage */}
             {project.status === 'invoiced' && (
               <>
                 {!project.invoiceSentAt ? (
-                  <AccentBtn fill={C.invoiced} onClick={handleSendInvoice}>
+                  <Btn variant="accent-cyan" fullWidth onClick={handleSendInvoice}>
                     <Send size={15} /> Send to client →
-                  </AccentBtn>
+                  </Btn>
                 ) : (
                   <>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <SecondaryBtn onClick={handleSendInvoice} flex>
+                      <Btn variant="secondary" style={{ flex: 1 }} onClick={handleSendInvoice}>
                         <Send size={15} /> Resend to client
-                      </SecondaryBtn>
-                      <IconBtn onClick={() => copyLink('invoice')} title="Copy invoice link" ariaLabel="Copy invoice link">
+                      </Btn>
+                      <Btn variant="secondary" style={{ width: 48, height: 48, flexShrink: 0, padding: 0 }}
+                        onClick={() => copyLink('invoice')} title="Copy invoice link" aria-label="Copy invoice link">
                         {copied === 'invoice' ? <Check size={16} /> : <Link size={16} />}
-                      </IconBtn>
+                      </Btn>
                     </div>
-                    <AccentBtn fill={C.cleared} onClick={() => setShowClear(true)}>
+                    <Btn variant="accent-green" fullWidth onClick={() => setShowClear(true)}>
                       <CheckCircle2 size={15} /> Mark as cleared →
-                    </AccentBtn>
+                    </Btn>
                   </>
                 )}
               </>
@@ -1085,7 +1084,6 @@ export default function ProjectDetail() {
         description="This means the invoice has been paid and everything is wrapped up."
         confirmLabel="Mark as cleared →"
         confirmBg={C.cleared}
-        confirmTextColor={C.black}
         confirmIcon={<CheckCircle2 size={15} />}
         onConfirm={handleClear}
       />
@@ -1102,83 +1100,7 @@ export default function ProjectDetail() {
   );
 }
 
-/* ── Button style helpers ──────────────────────────────────── */
-function PrimaryBtn({ onClick, children }: { onClick?: () => void; children: React.ReactNode }) {
-  const [hov, setHov] = useState(false);
-  const [prs, setPrs] = useState(false);
-  return (
-    <button onClick={onClick}
-      onMouseEnter={() => setHov(true)} onMouseLeave={() => { setHov(false); setPrs(false); }}
-      onPointerDown={() => setPrs(true)} onPointerUp={() => setPrs(false)}
-      style={{
-        width: '100%', height: 48,
-        background: prs ? '#111' : hov ? '#222' : C.black,
-        color: C.white, border: `1.5px solid ${C.black}`, borderRadius: R.xl,
-        cursor: 'pointer', fontSize: T.input.fontSize, fontWeight: 700,
-        letterSpacing: '-0.01em', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', gap: 8,
-        transform: prs ? 'scale(0.98)' : 'scale(1)',
-        transition: 'background 120ms ease-in-out, transform 100ms ease-in-out',
-      }}>{children}</button>
-  );
-}
-function SecondaryBtn({ onClick, flex, children }: { onClick?: () => void; flex?: boolean; children: React.ReactNode }) {
-  const [hov, setHov] = useState(false);
-  const [prs, setPrs] = useState(false);
-  return (
-    <button onClick={onClick}
-      onMouseEnter={() => setHov(true)} onMouseLeave={() => { setHov(false); setPrs(false); }}
-      onPointerDown={() => setPrs(true)} onPointerUp={() => setPrs(false)}
-      style={{
-        width: '100%', height: 48,
-        background: prs ? '#F0F0F0' : hov ? '#F8F8F8' : C.white,
-        color: C.black, border: `1.5px solid ${C.black}`, borderRadius: R.xl,
-        cursor: 'pointer', fontSize: T.input.fontSize, fontWeight: 700,
-        letterSpacing: '-0.01em', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', gap: 8,
-        flex: flex ? 1 : undefined,
-        transform: prs ? 'scale(0.98)' : 'scale(1)',
-        transition: 'background 120ms ease-in-out, transform 100ms ease-in-out',
-      }}>{children}</button>
-  );
-}
-function AccentBtn({ fill, onClick, flex, children }: { fill: string; onClick?: () => void; flex?: boolean; children: React.ReactNode }) {
-  const [hov, setHov] = useState(false);
-  const [prs, setPrs] = useState(false);
-  return (
-    <button onClick={onClick}
-      onMouseEnter={() => setHov(true)} onMouseLeave={() => { setHov(false); setPrs(false); }}
-      onPointerDown={() => setPrs(true)} onPointerUp={() => setPrs(false)}
-      style={{
-        width: '100%', height: 48,
-        background: fill, color: C.black, border: `1.5px solid ${C.black}`, borderRadius: R.xl,
-        cursor: 'pointer', fontSize: T.input.fontSize, fontWeight: 700,
-        letterSpacing: '-0.01em', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', gap: 8,
-        flex: flex ? 1 : undefined,
-        filter: prs ? 'brightness(0.86)' : hov ? 'brightness(0.92)' : 'brightness(1)',
-        transform: prs ? 'scale(0.98)' : 'scale(1)',
-        transition: 'filter 120ms ease-in-out, transform 100ms ease-in-out',
-      }}>{children}</button>
-  );
-}
-function IconBtn({ onClick, title, ariaLabel, children }: { onClick?: () => void; title?: string; ariaLabel?: string; children: React.ReactNode }) {
-  const [hov, setHov] = useState(false);
-  const [prs, setPrs] = useState(false);
-  return (
-    <button onClick={onClick} title={title} aria-label={ariaLabel}
-      onMouseEnter={() => setHov(true)} onMouseLeave={() => { setHov(false); setPrs(false); }}
-      onPointerDown={() => setPrs(true)} onPointerUp={() => setPrs(false)}
-      style={{
-        width: 48, height: 48, flexShrink: 0,
-        background: prs ? '#F0F0F0' : hov ? '#F8F8F8' : C.white,
-        color: C.black, border: `1.5px solid ${C.black}`, borderRadius: R.xl,
-        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-        transform: prs ? 'scale(0.97)' : 'scale(1)',
-        transition: 'background 120ms ease-in-out, transform 100ms ease-in-out',
-      }}>{children}</button>
-  );
-}
+
 
 function EditProjectBtn({ onClick }: { onClick: () => void }) {
   const [hov, setHov] = useState(false);
@@ -1196,38 +1118,5 @@ function EditProjectBtn({ onClick }: { onClick: () => void }) {
         borderRadius: '0 0 6px 6px',
       }}
     >Edit project</button>
-  );
-}
-function NavCancelBtn({ onClick }: { onClick: () => void }) {
-  const [hov, setHov] = useState(false);
-  return (
-    <button onClick={onClick}
-      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{
-        background: 'none', border: 'none', cursor: 'pointer',
-        color: hov ? 'rgba(255,255,255,0.7)' : '#7A8099',
-        minWidth: 44, minHeight: 44,
-        display: 'flex', alignItems: 'center', padding: 0,
-        fontSize: '13px', fontWeight: 400,
-        transition: 'color 150ms ease-in-out',
-      }}
-    >Cancel</button>
-  );
-}
-function NavSaveBtn({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
-  const [hov, setHov] = useState(false);
-  return (
-    <button onClick={onClick} disabled={disabled}
-      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{
-        background: 'none', border: 'none',
-        cursor: disabled ? 'default' : 'pointer',
-        color: C.white, minWidth: 44, minHeight: 44,
-        display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
-        padding: 0, fontSize: '13px', fontWeight: 600,
-        opacity: disabled ? 0.3 : hov ? 0.65 : 1,
-        transition: 'opacity 150ms ease-in-out',
-      }}
-    >Save</button>
   );
 }

@@ -1,3 +1,5 @@
+import type { PaymentTerms } from './types';
+
 /* ── Base palette ──────────────────────────────────────── */
 export const C = {
   black:        '#0A0A0A',
@@ -83,3 +85,17 @@ export const formatDate = (date?: string, style: 'short' | 'long' = 'long'): str
   if (style === 'short') return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 };
+
+/* ── Shared currency constants ────────────────────────── */
+export const CURRENCIES = ['GBP', 'USD', 'EUR', 'INR', 'AUD', 'CAD'] as const;
+
+export const currSym = (c: string): string =>
+  ({ GBP: '£', USD: '$', EUR: '€', INR: '₹', AUD: 'A$', CAD: 'C$' } as Record<string, string>)[c] || c;
+
+/* ── Payment terms ────────────────────────────────────── */
+export const PAYMENT_TERMS: { key: PaymentTerms; label: string }[] = [
+  { key: 'net7',   label: '7 days'  },
+  { key: 'net14',  label: '14 days' },
+  { key: 'net30',  label: '30 days' },
+  { key: 'custom', label: 'Custom'  },
+];

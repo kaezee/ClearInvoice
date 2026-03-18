@@ -12,7 +12,6 @@ export interface ServiceItem {
   id: string;
   name: string;
   price: number;
-  fromRateCard?: boolean;
   rateCardId?: string;
 }
 
@@ -38,7 +37,6 @@ export interface Project {
   contactPerson?: string;
   additionalContacts?: Contact[];   // up to 2 extra contacts
   type: string;
-  categories?: string[];
   services?: ServiceItem[];
   amount: number;
   depositAmount?: number;
@@ -105,7 +103,6 @@ export interface InvoiceDefaultsType {
   addressLine2?: string;
   city?: string;
   postcode?: string;
-  address?: string;
   businessEmail?: string;
   phone?: string;
   regNumber?: string;

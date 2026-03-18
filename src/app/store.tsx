@@ -261,7 +261,6 @@ const DEFAULT_INVOICE_DEFAULTS: InvoiceDefaultsType = {
   addressLine2:  '',
   city:          'London',
   postcode:      'EC1M 5RF',
-  address:       '14 Clerkenwell Road\nLondon EC1M 5RF',
   businessEmail: 'john@jdstudio.co',
   phone:         '',
   regNumber:     '',

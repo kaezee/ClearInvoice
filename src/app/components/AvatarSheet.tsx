@@ -6,7 +6,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
-import { C, T, R } from '../tokens';
+import { C, T, R, CURRENCIES, currSym, PAYMENT_TERMS } from '../tokens';
 import { useApp } from '../store';
 import { ProjectCard } from './ProjectCard';
 import { Modal } from './Modal';
@@ -15,20 +15,14 @@ import { NumberInput } from './ui/NumberInput';
 import { LightModalBtn } from './ui/CircleIconBtn';
 import {
   BrandingSettings, InvoiceDefaultsType, InvoiceStyle,
-  RateCardItem, CustomField, PaymentTerms,
+  RateCardItem, CustomField,
 } from '../types';
 
 /* ── Types & constants ────────────────────────────────────── */
 
 type View = 'menu' | 'edit-profile' | 'branding' | 'invoice-defaults' | 'archived' | 'help';
 
-const CURRENCIES = ['GBP', 'USD', 'EUR', 'INR', 'AUD', 'CAD'];
-const PAYMENT_TERMS: { key: PaymentTerms; label: string }[] = [
-  { key: 'net7',   label: '7 days'  },
-  { key: 'net14',  label: '14 days' },
-  { key: 'net30',  label: '30 days' },
-  { key: 'custom', label: 'Custom'  },
-];
+
 const QUOTE_EXPIRY_OPTIONS = [7, 14, 30];
 const PRESET_COLORS = ['#FF659C', '#FFE24B', '#65F7FF', '#4DFF91', '#0A0A0A', '#7C3AED'];
 
@@ -474,13 +468,7 @@ function InvoiceDefaultsContent({ onBack, onGoBranding }: { onBack: () => void; 
     }
   };
 
-  const currSymbol =
-    defaults.defaultCurrency === 'GBP' ? '£'  :
-    defaults.defaultCurrency === 'USD' ? '$'  :
-    defaults.defaultCurrency === 'EUR' ? '€'  :
-    defaults.defaultCurrency === 'INR' ? '₹'  :
-    defaults.defaultCurrency === 'AUD' ? 'A$' :
-    defaults.defaultCurrency === 'CAD' ? 'C$' : defaults.defaultCurrency;
+  const currSymbol = currSym(defaults.defaultCurrency ?? 'GBP');
 
   const handleSave = () => {
     updateInvoiceDefaults(defaults);
