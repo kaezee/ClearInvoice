@@ -13,7 +13,10 @@ export function QuoteSection({ project, onUpdate }: QuoteSectionProps) {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [showHint, setShowHint] = useState(true);
 
-  const quoteRef = project.invoiceNumber.replace('INV-', 'QUO-');
+  const quoteRef = (() => {
+    const v = project.quoteVersion ?? 1;
+    return `QUO-${String(v).padStart(3, '0')}`;
+  })();
 
   const updateItemField = (id: string, field: 'description' | 'amount', value: string | number) => {
     const updated = project.invoiceItems.map(item =>
@@ -88,7 +91,10 @@ export function QuoteSection({ project, onUpdate }: QuoteSectionProps) {
 
         {/* Client + date */}
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: '13px', fontWeight: 600, color: C.black }}>
+          <div style={{
+            fontSize: '13px', fontWeight: 600, color: C.black,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%',
+          }}>
             {project.clientName}
           </div>
           <div style={{ ...T.xs, color: C.muted, marginTop: 2 }}>
@@ -101,7 +107,7 @@ export function QuoteSection({ project, onUpdate }: QuoteSectionProps) {
         {/* Line items */}
         {project.invoiceItems.map((item) => (
           <div key={item.id} style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
             padding: '6px 0', borderBottom: `1px solid ${C.border}`,
             gap: 8, minWidth: 0,
           }}>
@@ -122,8 +128,11 @@ export function QuoteSection({ project, onUpdate }: QuoteSectionProps) {
                 style={{
                   fontSize: '13px', color: C.black, cursor: 'text', flex: 1, minWidth: 0,
                   borderBottom: `1px dashed ${C.black}`,
-                  display: 'inline-block', paddingBottom: 1,
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical' as const,
+                  overflow: 'hidden',
+                  paddingBottom: 1,
                 }}
               >
                 {item.description}
@@ -134,7 +143,8 @@ export function QuoteSection({ project, onUpdate }: QuoteSectionProps) {
               {editingField === `amt-${item.id}` ? (
                 <input
                   autoFocus
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   defaultValue={item.amount}
                   onBlur={(e) => { updateItemField(item.id, 'amount', e.target.value); setEditingField(null); }}
                   style={{
@@ -150,6 +160,7 @@ export function QuoteSection({ project, onUpdate }: QuoteSectionProps) {
                     fontSize: '13px', fontWeight: 600, color: C.black, cursor: 'text',
                     borderBottom: `1px dashed ${C.black}`,
                     paddingBottom: 1,
+                    whiteSpace: 'nowrap' as const,
                   }}
                 >
                   {formatAmount(item.amount, project.currency)}
@@ -159,10 +170,13 @@ export function QuoteSection({ project, onUpdate }: QuoteSectionProps) {
               {project.invoiceItems.length > 1 && (
                 <button
                   onClick={() => removeItem(item.id)}
+                  onMouseEnter={e => (e.currentTarget.style.color = C.danger)}
+                  onMouseLeave={e => (e.currentTarget.style.color = C.borderStrong)}
                   style={{
                     background: 'none', border: 'none', cursor: 'pointer',
                     color: C.borderStrong, padding: 2, lineHeight: 1,
-                    fontSize: '14px', display: 'flex', alignItems: 'center',
+                    fontSize: T.input.fontSize, display: 'flex', alignItems: 'center',
+                    transition: 'color 150ms',
                   }}
                   aria-label="Remove line item"
                 >
@@ -173,17 +187,19 @@ export function QuoteSection({ project, onUpdate }: QuoteSectionProps) {
           </div>
         ))}
 
-        {/* Add line item */}
+        {/* Add extra charge or note */}
         <button
           onClick={addItem}
+          onMouseEnter={e => (e.currentTarget.style.color = C.black)}
+          onMouseLeave={e => (e.currentTarget.style.color = C.muted)}
           style={{
             background: 'none', border: 'none', cursor: 'pointer',
             fontSize: '13px', fontWeight: 500, color: C.muted,
             padding: '8px 0', display: 'flex', alignItems: 'center', gap: 4,
-            width: '100%', textAlign: 'left',
+            width: '100%', textAlign: 'left', transition: 'color 150ms',
           }}
         >
-          <Plus size={14} /> Add line item
+          <Plus size={14} /> Add extra charge or note
         </button>
 
         {/* Total */}
@@ -203,10 +219,10 @@ export function QuoteSection({ project, onUpdate }: QuoteSectionProps) {
           {editingField === 'notes' ? (
             <textarea
               autoFocus
-              defaultValue={project.invoiceNotes || ''}
+              defaultValue={project.quoteNotes ?? project.invoiceNotes ?? ''}
               rows={3}
               onBlur={(e) => {
-                onUpdate({ invoiceNotes: e.target.value });
+                onUpdate({ quoteNotes: e.target.value });
                 setEditingField(null);
                 setShowHint(false);
               }}
@@ -222,13 +238,13 @@ export function QuoteSection({ project, onUpdate }: QuoteSectionProps) {
               onClick={() => setEditingField('notes')}
               style={{
                 ...T.xs,
-                color: project.invoiceNotes ? C.muted : C.hint,
+                color: (project.quoteNotes ?? project.invoiceNotes) ? C.muted : C.hint,
                 cursor: 'text',
                 borderBottom: `1px dashed ${C.muted}`,
                 display: 'block', paddingBottom: 1, lineHeight: 1.6,
               }}
             >
-              {project.invoiceNotes || 'Add quote notes or terms...'}
+              {project.quoteNotes ?? project.invoiceNotes ?? 'Add quote notes or terms...'}
             </span>
           )}
         </div>
@@ -237,11 +253,13 @@ export function QuoteSection({ project, onUpdate }: QuoteSectionProps) {
         {showHint && (
           <button
             onClick={() => setShowHint(false)}
+            onMouseEnter={e => (e.currentTarget.style.color = C.black)}
+            onMouseLeave={e => (e.currentTarget.style.color = C.muted)}
             style={{
               display: 'flex', alignItems: 'center', gap: 4,
               marginTop: 10, background: 'none', border: 'none',
               cursor: 'pointer', padding: 0,
-              fontSize: '11px', color: C.muted,
+              fontSize: '11px', color: C.muted, transition: 'color 150ms',
             }}
           >
             <Pencil size={10} />

@@ -1,5 +1,5 @@
-import React, { useRef, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router';
+import React, { useState, useRef, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router';
 import { ArrowRight, Trash2, Archive, RotateCcw } from 'lucide-react';
 import { Project } from '../types';
 import { C, T, R, STATUS_FILL, formatAmount, formatDate } from '../tokens';
@@ -8,10 +8,10 @@ import { ProjectStatus } from '../types';
 
 const STATUS_ORDER: ProjectStatus[] = ['ready', 'in-progress', 'invoiced', 'cleared'];
 
-// How far left to drag before the action buttons snap open
-const LEFT_THRESHOLD  = 64;
-// Width of the revealed action area
-const REVEAL_W        = 136;
+// How far left to drag before the action buttons snap open (% of card width)
+const LEFT_THRESHOLD_PCT = 0.15;
+// Width of the revealed action area (% of card width) — 20% per button × 2
+const REVEAL_PCT = 0.40;
 
 interface ProjectCardProps {
   project: Project;
@@ -22,13 +22,19 @@ interface ProjectCardProps {
   onDeleteRequest: () => void;
   onArchive: () => void;
   onRestore?: () => void; // If provided: show Restore instead of Archive
+  isReadOnly?: boolean;  // Cleared tab: no swipe, no actions
+  /** Which tab the card lives in — passed through to ProjectDetail so back works correctly */
+  fromTab?: 'active' | 'cleared';
+  /** Override card-tap navigation entirely (used by ArchivedContent inside AvatarSheet) */
+  onCardClick?: (id: string) => void;
 }
 
 export function ProjectCard({
   project, isOverdue, onStatusTap, onAdvanceStatus, onRequestClear,
-  onDeleteRequest, onArchive, onRestore,
+  onDeleteRequest, onArchive, onRestore, isReadOnly, fromTab, onCardClick,
 }: ProjectCardProps) {
   const navigate  = useNavigate();
+  const location  = useLocation();
   const cardRef   = useRef<HTMLDivElement>(null);
 
   const [offsetX, setOffsetX]           = useState(0);
@@ -36,6 +42,8 @@ export function ProjectCard({
   const [snapping, setSnapping]         = useState(false);
   const [dragging, setDragging]         = useState(false);
   const [justAdvanced, setJustAdvanced] = useState(false);
+  // Instant visual feedback on tap — works even for isReadOnly (cleared) cards
+  const [pressed, setPressed]           = useState(false);
 
   // Ref mirrors for values that must be read reliably inside event handlers
   // (React state is stale in pointer handlers during rapid gesture sequences)
@@ -55,6 +63,8 @@ export function ProjectCard({
 
   // 80% of card width is the commit threshold for advancing status
   const getRightThreshold = () => (cardRef.current?.offsetWidth ?? 400) * 0.8;
+  const getRevealW        = () => (cardRef.current?.offsetWidth ?? 320) * REVEAL_PCT;
+  const getLeftThreshold  = () => (cardRef.current?.offsetWidth ?? 320) * LEFT_THRESHOLD_PCT;
 
   /* ─── snap helpers ───────────────────────────────────── */
   const snapTo = useCallback((x: number) => {
@@ -72,6 +82,8 @@ export function ProjectCard({
 
   /* ─── pointer handlers ────────────────────────────────── */
   const handlePointerDown = (e: React.PointerEvent) => {
+    setPressed(true);                                          // instant feedback for all cards
+    if (isReadOnly) return;                                    // cleared: no swipe at all
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     if ((e.target as HTMLElement).closest('button')) return;
 
@@ -95,9 +107,10 @@ export function ProjectCard({
     }
     if (!didDrag.current) return;
 
+    const revealW = getRevealW();
+
     if (revealedRef.current) {
-      // While revealed: right drag collapses, left is clamped at REVEAL_W
-      const next = Math.min(0, Math.max(-REVEAL_W + dx, -REVEAL_W));
+      const next = Math.min(0, Math.max(-revealW + dx, -revealW));
       offsetXRef.current = next;
       setOffsetX(next);
       return;
@@ -108,28 +121,28 @@ export function ProjectCard({
       offsetXRef.current = val;
       setOffsetX(val);
     } else if (dx < 0) {
-      const val = Math.max(dx, -REVEAL_W);
+      const val = Math.max(dx, -revealW);
       offsetXRef.current = val;
       setOffsetX(val);
     }
   };
 
   const handlePointerUp = () => {
+    setPressed(false);
     if (startX.current === null) return;
     startX.current = null;
 
-    const cur = offsetXRef.current; // always current, never stale
+    const cur        = offsetXRef.current;
+    const revealW    = getRevealW();
+    const leftThresh = getLeftThreshold();
+    const rightThreshold = getRightThreshold();
 
     if (revealedRef.current) {
       if (didDrag.current) {
-        // Dragged right far enough → collapse; otherwise snap back open
-        cur > -LEFT_THRESHOLD ? collapse() : snapTo(-REVEAL_W);
+        cur > -leftThresh ? collapse() : snapTo(-revealW);
       }
-      // Pure tap while revealed → let handleClick decide (collapse on tap)
       return;
     }
-
-    const rightThreshold = getRightThreshold();
 
     if (cur >= rightThreshold) {
       snapTo(0);
@@ -140,9 +153,8 @@ export function ProjectCard({
         setJustAdvanced(true);
         setTimeout(() => setJustAdvanced(false), 600);
       }
-    } else if (cur <= -LEFT_THRESHOLD) {
-      // Lock open — stays until user taps a button or swipes back right
-      snapTo(-REVEAL_W);
+    } else if (cur <= -leftThresh) {
+      snapTo(-revealW);
       revealedRef.current = true;
       setRevealed(true);
     } else {
@@ -151,28 +163,37 @@ export function ProjectCard({
   };
 
   const handlePointerCancel = () => {
+    setPressed(false);
     startX.current = null;
-    snapTo(revealedRef.current ? -REVEAL_W : 0);
+    snapTo(revealedRef.current ? -getRevealW() : 0);
   };
 
   /* ─── click (tap, not drag) ──────────────────────────── */
   const handleClick = (e: React.MouseEvent) => {
     if (revealedRef.current) {
-      // Pure tap on card body while revealed → close
       if (!didDrag.current) collapse();
       return;
     }
     if (didDrag.current) return;
-    navigate(`/projects/${project.id}`);
+    if (onCardClick) {
+      onCardClick(project.id);
+    } else {
+      navigate(`/projects/${project.id}`, {
+        state: {
+          from: location.pathname,
+          ...(fromTab ? { tab: fromTab } : {}),
+        },
+      });
+    }
   };
 
   /* ─── derived visual state ───────────────────────────── */
   const swipingRight   = offsetX > 0;
   const swipingLeft    = offsetX < 0;
   const cardWidth      = cardRef.current?.offsetWidth ?? 400;
+  const revealW        = cardWidth * REVEAL_PCT;
   const rightThreshold = cardWidth * 0.8;
   const rightProgress  = Math.min(offsetX / rightThreshold, 1);
-  const leftProgress   = Math.min(-offsetX / LEFT_THRESHOLD, 1);
 
   // CMY colour of the destination status
   const revealBg = nextStatus ? STATUS_FILL[nextStatus] : C.cleared;
@@ -188,18 +209,19 @@ export function ProjectCard({
       aria-label={`${project.clientName}, ${project.type}, ${formatAmount(project.amount, project.currency)}, ${project.status}`}
       style={{
         position: 'relative',
-        borderRadius: R.xl,
+        borderRadius: '8px',
         overflow: 'hidden',
         userSelect: 'none',
+        touchAction: 'manipulation',  // eliminates 300ms tap-delay on all cards
         background: C.card,
       }}
     >
       {/* ── Right reveal: destination-status CMY colour ──── */}
-      {!isTerminal && (
+      {!isTerminal && !isReadOnly && (
         <div style={{
           position: 'absolute', inset: 0,
           background: revealBg,
-          borderRadius: R.xl,
+          borderRadius: '8px',
           display: 'flex', alignItems: 'center',
           paddingLeft: 20, gap: 10,
           opacity: swipingRight ? 1 : 0,
@@ -221,7 +243,7 @@ export function ProjectCard({
               opacity: rightProgress > 0.6 ? (rightProgress - 0.6) * 2.5 : 0,
               letterSpacing: '0.02em',
             }}>
-              → {nextLabel}
+              {nextLabel}
             </span>
           )}
           {/* Progress track */}
@@ -240,62 +262,37 @@ export function ProjectCard({
       )}
 
       {/* ── Left reveal: archive/restore + delete buttons ─── */}
-      <div style={{
-        position: 'absolute', right: 0, top: 0, bottom: 0,
-        width: REVEAL_W,
-        display: 'flex',
-        borderRadius: `0 ${R.xl} ${R.xl} 0`,
-        overflow: 'hidden',
-        opacity: swipingLeft || revealed ? 1 : 0,
-        transition: 'opacity 60ms',
-      }}>
-        <button
-          onPointerDown={e => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); collapse(); onRestore ? onRestore() : onArchive(); }}
-          style={{
-            flex: 1, minWidth: 72, border: 'none', cursor: 'pointer',
-            background: '#FFFFFF',
-            borderTop: '1px solid #E2E5EC',
-            borderBottom: '1px solid #E2E5EC',
-            display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center', gap: 5,
-            color: '#4B5563',
-            transition: 'background 150ms ease-in-out, transform 150ms ease-in-out',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#F0F0F0'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#FFFFFF'; e.currentTarget.style.transform = 'scale(1)'; }}
-          onPointerUp={e => { e.currentTarget.style.background = '#F0F0F0'; e.currentTarget.style.transform = 'scale(1)'; }}
-        >
-          {onRestore
-            ? <RotateCcw size={20} strokeWidth={2} />
-            : <Archive size={20} strokeWidth={2} />}
-          <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.02em' }}>
-            {onRestore ? 'Restore' : 'Archive'}
-          </span>
-        </button>
-
-        <button
-          onPointerDown={e => { e.stopPropagation(); e.currentTarget.style.background = '#FEE2E2'; e.currentTarget.style.transform = 'scale(0.98)'; }}
-          onClick={(e) => { e.stopPropagation(); collapse(); onDeleteRequest(); }}
-          style={{
-            flex: 1, minWidth: 72, border: 'none', cursor: 'pointer',
-            background: '#FFFFFF',
-            borderTop: '1px solid #E2E5EC',
-            borderBottom: '1px solid #E2E5EC',
-            borderLeft: '1px solid #E2E5EC',
-            display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center', gap: 5,
-            color: '#DC2626',
-            transition: 'background 150ms ease-in-out, transform 150ms ease-in-out',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#FEF2F2'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#FFFFFF'; e.currentTarget.style.transform = 'scale(1)'; }}
-          onPointerUp={e => { e.currentTarget.style.background = '#FEF2F2'; e.currentTarget.style.transform = 'scale(1)'; }}
-        >
-          <Trash2 size={20} strokeWidth={2} />
-          <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.02em' }}>Delete</span>
-        </button>
-      </div>
+      {!isReadOnly && (
+        <div style={{
+          position: 'absolute', right: 0, top: 0, bottom: 0,
+          width: revealW,
+          display: 'flex',
+          borderRadius: '0 8px 8px 0',
+          overflow: 'hidden',
+          opacity: swipingLeft || revealed ? 1 : 0,
+          transition: 'opacity 60ms',
+        }}>
+          <RevealButton
+            icon={onRestore ? <RotateCcw size={20} strokeWidth={2} /> : <Archive size={20} strokeWidth={2} />}
+            label={onRestore ? 'Restore' : 'Archive'}
+            iconColor={C.muted}
+            hoverBg={C.surface}
+            activeBg={C.border}
+            dividerRight
+            onPointerDownCapture={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); collapse(); onRestore ? onRestore() : onArchive(); }}
+          />
+          <RevealButton
+            icon={<Trash2 size={20} strokeWidth={2} />}
+            label="Delete"
+            iconColor={C.danger}
+            hoverBg={C.dangerLight}
+            activeBg={C.dangerLight}
+            onPointerDownCapture={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); collapse(); onDeleteRequest(); }}
+          />
+        </div>
+      )}
 
       {/* ── Main card ─────────────────────────────────────── */}
       <div
@@ -306,105 +303,68 @@ export function ProjectCard({
         onPointerCancel={handlePointerCancel}
         style={{
           transform: `translateX(${offsetX}px)`,
-          transition,
-          background: justAdvanced ? '#f0fdf4' : C.card,
+          transition: pressed && isReadOnly ? 'background 60ms' : transition,
+          background: justAdvanced ? C.greenLight : pressed && isReadOnly ? C.border : C.card,
           borderTop:    `1px solid ${justAdvanced ? C.green : revealed ? C.borderStrong : C.border}`,
           borderRight:  `1px solid ${justAdvanced ? C.green : revealed ? C.borderStrong : C.border}`,
           borderBottom: `1px solid ${justAdvanced ? C.green : revealed ? C.borderStrong : C.border}`,
           borderLeft:   isOverdue && !justAdvanced
             ? `3px solid ${C.yellow}`
             : `1px solid ${justAdvanced ? C.green : revealed ? C.borderStrong : C.border}`,
-          borderRadius: R.xl,
-          padding: '20px 20px 20px 20px',
+          borderRadius: '8px',
+          padding: isReadOnly ? '10px 16px' : '16px',
           cursor: dragging ? 'grabbing' : 'pointer',
           position: 'relative',
           zIndex: 1,
           touchAction: 'pan-y',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+        {/* ── Three-row card layout ─────────────────────────── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: isReadOnly ? 6 : 8 }}>
 
-          {/* ── Left column: Name / Status / Category ─── */}
-          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {/* Client name */}
+          {/* Row 1: Client name (left) + Modifier text (right) */}
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
             <span style={{
-              ...T.base, fontWeight: 600, color: C.black,
+              fontSize: '15px', fontWeight: 600, color: C.black,
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              flex: 1, minWidth: 0,
             }}>
               {project.clientName}
             </span>
-
-            {/* Status pill */}
-            <div onClick={(e) => e.stopPropagation()}>
-              <StatusPill status={project.status} interactive onClick={onStatusTap} />
-            </div>
-
-            {/* Category tags — locked spec, max 3 visible + "+N" overflow */}
-            {(() => {
-              const tags = project.categories?.length
-                ? project.categories
-                : project.type
-                ? [project.type]
-                : [];
-              const visible = tags.slice(0, 3);
-              const overflow = tags.length - visible.length;
-              return (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                  {visible.map(tag => (
-                    <span key={tag} style={{
-                      display: 'inline-block',
-                      background: '#F0F0F0',
-                      border: '1.5px solid #C4C4C4',
-                      borderRadius: 16,
-                      padding: '4px 12px',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: '#6B6B6B',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      {tag}
-                    </span>
-                  ))}
-                  {overflow > 0 && (
-                    <span style={{
-                      display: 'inline-block',
-                      background: '#F0F0F0',
-                      border: '1.5px solid #C4C4C4',
-                      borderRadius: 16,
-                      padding: '4px 12px',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: '#7A8099',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      +{overflow}
-                    </span>
-                  )}
-                </div>
-              );
-            })()}
+            <ModifierText project={project} isOverdue={isOverdue} />
           </div>
 
-          {/* ── Right column: Modifier badge / Due text / Amount ── */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-            {/* Modifier badge (Overdue) or spacer */}
-            {isOverdue ? (
-              <span style={{
-                fontSize: '10px', fontWeight: 700, color: C.black,
-                background: C.yellow, padding: '3px 10px', borderRadius: R.pill,
-                letterSpacing: '0.01em',
-              }}>
-                Overdue
-              </span>
-            ) : (
-              <span style={{ height: 22 }} />
-            )}
+          {/* Row 2: Status pill only */}
+          <div onClick={(e) => e.stopPropagation()}>
+            <StatusPill status={project.status} interactive onClick={onStatusTap} />
+          </div>
 
-            {/* Modifier text / due date */}
-            <OverdueLine project={project} isOverdue={isOverdue} />
-
-            {/* Amount */}
-            <span style={{ ...T.base, fontSize: '18px', fontWeight: 600, color: C.black, marginTop: 4 }}>
+          {/* Row 3: Category text (left) + Amount (right) */}
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+            <span style={{
+              fontSize: T.pill.fontSize, fontWeight: 400, color: C.muted,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              flex: 1, minWidth: 0,
+            }}>
+              {(() => {
+                let all: string[];
+                if (project.services?.length) {
+                  all = project.services.map(s => s.name);
+                } else if (project.categories?.length) {
+                  all = project.categories;
+                } else if (project.type) {
+                  all = [project.type];
+                } else {
+                  all = [];
+                }
+                const visible = all.slice(0, 2);
+                const overflow = all.length - visible.length;
+                return overflow > 0
+                  ? `${visible.join(', ')} +${overflow} more`
+                  : visible.join(', ');
+              })()}
+            </span>
+            <span style={{ fontSize: T.lg.fontSize, fontWeight: 600, color: C.black, flexShrink: 0 }}>
               {formatAmount(project.amount, project.currency)}
             </span>
           </div>
@@ -415,67 +375,137 @@ export function ProjectCard({
   );
 }
 
-/* ── Helper: right-column date line ──────────────────────── */
-function OverdueLine({ project, isOverdue }: { project: Project; isOverdue: boolean }) {
+/* ── Modifier text — Row 1 right, time-sensitive info ──────── */
+function ModifierText({ project, isOverdue }: { project: Project; isOverdue: boolean }) {
+  const s: React.CSSProperties = { fontSize: T.pill.fontSize, fontWeight: 400, flexShrink: 0, whiteSpace: 'nowrap' };
 
-  // ── QUOTING stage modifier ────────────────────────────────
-  if (project.status === 'ready') {
-    const today = new Date().toISOString().split('T')[0];
-    const isExpired = !!(project.expiryDate && project.expiryDate < today);
-
-    if (!project.sentAt) {
-      return <span style={{ fontSize: '12px', fontWeight: 500, color: '#7A8099' }}>Draft · not sent</span>;
-    }
-    if (isExpired) {
-      const days = Math.floor((Date.now() - new Date(project.expiryDate!).getTime()) / 86_400_000);
-      return <span style={{ fontSize: '12px', fontWeight: 500, color: '#7A5000' }}>Expired {days}d ago</span>;
-    }
-    if (project.viewedAt) {
-      const ms = Date.now() - new Date(project.viewedAt).getTime();
-      const hours = Math.floor(ms / 3_600_000);
-      if (hours < 1) return <span style={{ fontSize: '12px', fontWeight: 500, color: '#00A3B5' }}>Viewed just now</span>;
-      if (hours < 24) return <span style={{ fontSize: '12px', fontWeight: 500, color: '#00A3B5' }}>Viewed {hours}h ago</span>;
-      return <span style={{ fontSize: '12px', fontWeight: 500, color: '#00A3B5' }}>Viewed {Math.floor(hours/24)}d ago</span>;
-    }
-    return <span style={{ fontSize: '12px', fontWeight: 500, color: '#7A8099' }}>Sent · not viewed</span>;
-  }
-
-  // ── INVOICED stage modifier ───────────────────────────────
-  if (project.status === 'invoiced') {
-    // Reminder takes priority over overdue for the text label
-    if (project.remindedAt) {
-      const days = Math.floor((Date.now() - new Date(project.remindedAt).getTime()) / 86_400_000);
-      const label = days < 1 ? 'Reminder sent today' : `Reminder sent ${days}d ago`;
-      return <span style={{ fontSize: '12px', fontWeight: 500, color: '#7A8099' }}>{label}</span>;
-    }
-    if (isOverdue) {
-      const days = Math.floor((Date.now() - new Date(project.dueDate!).getTime()) / 86_400_000);
-      if (project.invoiceViewedAt) {
-        return <span style={{ fontSize: '12px', fontWeight: 500, color: '#7A5000' }}>Viewed · {days}d overdue</span>;
-      }
-      return <span style={{ fontSize: '12px', fontWeight: 500, color: '#7A5000' }}>Not viewed · {days}d overdue</span>;
-    }
-    if (!project.invoiceSentAt) {
-      return <span style={{ fontSize: '12px', fontWeight: 500, color: '#7A8099' }}>Draft · not sent</span>;
-    }
-    if (project.invoiceViewedAt) {
-      const ms = Date.now() - new Date(project.invoiceViewedAt).getTime();
-      const hours = Math.floor(ms / 3_600_000);
-      if (hours < 1) return <span style={{ fontSize: '12px', fontWeight: 500, color: '#00A3B5' }}>Viewed just now</span>;
-      if (hours < 24) return <span style={{ fontSize: '12px', fontWeight: 500, color: '#00A3B5' }}>Viewed {hours}h ago</span>;
-      return <span style={{ fontSize: '12px', fontWeight: 500, color: '#00A3B5' }}>Viewed {Math.floor(hours/24)}d ago</span>;
-    }
-    return <span style={{ fontSize: '12px', fontWeight: 500, color: '#7A8099' }}>Sent · not viewed</span>;
-  }
-
-  // ── IN PROGRESS — show due date ───────────────────────────
-  if (project.status === 'in-progress' && project.dueDate) {
+  // ── CLEARED ───────────────────────────────────────────────
+  if (project.status === 'cleared') {
+    const date = project.paidAt
+      ? formatDate(project.paidAt, 'short')
+      : null;
     return (
-      <span style={{ fontSize: '12px', color: C.muted, fontWeight: 400 }}>
-        Due {formatDate(project.dueDate, 'short')}
+      <span style={{ ...s, color: C.greenText }}>
+        {date ? `Paid ${date}` : 'Paid'}
       </span>
     );
   }
 
+  // ── QUOTING ───────────────────────────────────────────────
+  if (project.status === 'ready') {
+    const today = new Date().toISOString().split('T')[0];
+    const isExpired = !!(project.expiryDate && project.expiryDate < today);
+    const isRevised = (project.quoteRevisions?.length ?? 0) > 0 && !project.sentAt;
+
+    if (isRevised) {
+      return <span style={{ ...s, color: C.amberText }}>Quote revised · not sent</span>;
+    }
+    if (!project.sentAt) {
+      return <span style={{ ...s, color: C.muted }}>Draft · not sent</span>;
+    }
+    if (isExpired) {
+      const days = Math.floor((Date.now() - new Date(project.expiryDate!).getTime()) / 86_400_000);
+      return <span style={{ ...s, color: C.amberText }}>Expired {days}d ago</span>;
+    }
+    if (project.viewedAt) {
+      const ms = Date.now() - new Date(project.viewedAt).getTime();
+      const hours = Math.floor(ms / 3_600_000);
+      if (hours < 1)  return <span style={{ ...s, color: C.teal }}>Viewed just now</span>;
+      if (hours < 24) return <span style={{ ...s, color: C.teal }}>Viewed {hours}h ago</span>;
+      return <span style={{ ...s, color: C.teal }}>Viewed {Math.floor(hours / 24)}d ago</span>;
+    }
+    return <span style={{ ...s, color: C.muted }}>Sent · not viewed</span>;
+  }
+
+  // ── INVOICED ──────────────────────────────────────────────
+  if (project.status === 'invoiced') {
+    if (project.remindedAt) {
+      const days = Math.floor((Date.now() - new Date(project.remindedAt).getTime()) / 86_400_000);
+      const label = days < 1 ? 'Reminder sent today' : `Reminder sent ${days}d ago`;
+      return <span style={{ ...s, color: C.muted }}>{label}</span>;
+    }
+    if (isOverdue) {
+      const days = Math.floor((Date.now() - new Date(project.dueDate!).getTime()) / 86_400_000);
+      return project.invoiceViewedAt
+        ? <span style={{ ...s, color: C.amberText }}>Viewed · {days}d overdue</span>
+        : <span style={{ ...s, color: C.amberText }}>Not viewed · {days}d overdue</span>;
+    }
+    if (!project.invoiceSentAt) {
+      return <span style={{ ...s, color: C.muted }}>Draft · not sent</span>;
+    }
+    if (project.invoiceViewedAt) {
+      const ms = Date.now() - new Date(project.invoiceViewedAt).getTime();
+      const hours = Math.floor(ms / 3_600_000);
+      if (hours < 1)  return <span style={{ ...s, color: C.teal }}>Viewed just now</span>;
+      if (hours < 24) return <span style={{ ...s, color: C.teal }}>Viewed {hours}h ago</span>;
+      return <span style={{ ...s, color: C.teal }}>Viewed {Math.floor(hours / 24)}d ago</span>;
+    }
+    return <span style={{ ...s, color: C.muted }}>Sent · not viewed</span>;
+  }
+
+  // ── IN PROGRESS ───────────────────────────────────────────
+  if (project.status === 'in-progress' && project.dueDate) {
+    return <span style={{ ...s, color: C.muted }}>Due {formatDate(project.dueDate, 'short')}</span>;
+  }
+
   return null;
+}
+
+/* ── Reveal button ──────────────────────────────────────── */
+function RevealButton({
+  icon, label, subLabel, iconColor, subLabelColor, hoverBg, activeBg, dividerRight,
+  onPointerDownCapture, onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  subLabel?: string;
+  iconColor: string;
+  subLabelColor?: string;
+  hoverBg: string;
+  activeBg: string;
+  dividerRight?: boolean;
+  onPointerDownCapture?: (e: React.PointerEvent) => void;
+  onClick?: (e: React.MouseEvent) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
+
+  const bg = pressed ? activeBg : hovered ? hoverBg : '#FFFFFF';
+
+  return (
+    <button
+      onPointerDownCapture={onPointerDownCapture}
+      onClick={onClick}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => { setHovered(false); setPressed(false); }}
+      onPointerDown={e => { e.stopPropagation(); setPressed(true); }}
+      onPointerUp={() => setPressed(false)}
+      style={{
+        flex: 1,
+        borderTop: `1px solid ${C.border}`,
+        borderBottom: `1px solid ${C.border}`,
+        borderLeft: 'none',
+        borderRight: dividerRight ? `1px solid ${C.border}` : 'none',
+        cursor: 'pointer',
+        background: bg,
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        gap: 6,
+        padding: '0 12px',
+        color: iconColor,
+        transform: pressed ? 'scale(0.93)' : 'scale(1)',
+        transition: 'background 120ms ease-in-out, transform 120ms ease-in-out',
+      }}
+    >
+      {icon}
+      <span style={{ fontSize: T.xs.fontSize, fontWeight: 600, letterSpacing: '0.02em' }}>
+        {label}
+      </span>
+      {subLabel && (
+        <span style={{ fontSize: '9px', fontWeight: 400, color: subLabelColor ?? C.muted, letterSpacing: '0.01em' }}>
+          {subLabel}
+        </span>
+      )}
+    </button>
+  );
 }

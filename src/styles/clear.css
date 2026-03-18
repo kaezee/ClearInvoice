@@ -73,3 +73,16 @@ select:focus-visible {
 }
 
 scrollbar-width: none;
+
+/* ── Hide ALL native number spinner arrows globally ─────── */
+/* We always use the custom NumberInput stepper UI instead  */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none !important;
+  margin: 0 !important;
+  display: none !important;
+}
+input[type="number"] {
+  -moz-appearance: textfield !important;
+  appearance: textfield !important;
+}

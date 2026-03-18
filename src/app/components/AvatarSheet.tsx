@@ -1,14 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X, ChevronRight, ChevronLeft, Palette, FileText, Archive,
   HelpCircle, LogOut, User, Plus, Trash2, Upload, ChevronDown,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useNavigate } from 'react-router';
+import { toast } from 'sonner';
 import { C, T, R } from '../tokens';
 import { useApp } from '../store';
 import { ProjectCard } from './ProjectCard';
-import { BottomSheet } from './BottomSheet';
-import { ConfirmModal } from './ConfirmModal';
+import { Modal } from './Modal';
+import { DeleteModal } from './DeleteModal';
+import { NumberInput } from './ui/NumberInput';
+import { LightModalBtn } from './ui/CircleIconBtn';
 import {
   BrandingSettings, InvoiceDefaultsType, InvoiceStyle,
   RateCardItem, CustomField, PaymentTerms,
@@ -16,7 +20,7 @@ import {
 
 /* ── Types & constants ────────────────────────────────────── */
 
-type View = 'menu' | 'edit-profile' | 'branding' | 'invoice-defaults' | 'archived';
+type View = 'menu' | 'edit-profile' | 'branding' | 'invoice-defaults' | 'archived' | 'help';
 
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'INR', 'AUD', 'CAD'];
 const PAYMENT_TERMS: { key: PaymentTerms; label: string }[] = [
@@ -36,20 +40,26 @@ const ABS: React.CSSProperties = { position: 'absolute', inset: 0, overflow: 'hi
 interface AvatarSheetProps {
   open: boolean;
   onClose: () => void;
+  initialView?: View;
+  /** Skip the slide-in entrance animation (used when reopening after back-nav) */
+  instant?: boolean;
 }
 
-export function AvatarSheet({ open, onClose }: AvatarSheetProps) {
+export function AvatarSheet({ open, onClose, initialView, instant }: AvatarSheetProps) {
   const { projects, branding, updateBranding } = useApp();
   const archivedCount = projects.filter(p => p.status === 'archived').length;
-  const [view, setView] = useState<View>('menu');
+  const [view, setView] = useState<View>(initialView ?? 'menu');
 
-  // Reset to menu after panel finishes closing
+  // On open: jump straight to the requested sub-view (e.g. 'archived').
+  // On close: wait for the slide-down animation to finish before resetting to 'menu'.
   useEffect(() => {
-    if (!open) {
+    if (open) {
+      setView(initialView ?? 'menu');
+    } else {
       const t = setTimeout(() => setView('menu'), 360);
       return () => clearTimeout(t);
     }
-  }, [open]);
+  }, [open, initialView]);
 
   const freelancerName = branding.freelancerName || 'Freelancer';
   const businessName   = branding.businessName   || 'Your Studio';
@@ -65,16 +75,16 @@ export function AvatarSheet({ open, onClose }: AvatarSheetProps) {
           {/* Backdrop */}
           <motion.div
             key="avatar-backdrop"
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            initial={{ opacity: instant ? 1 : 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             transition={{ duration: 0.22 }}
             onClick={onClose}
             style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 200 }}
           />
 
-          {/* Slide-in panel */}
+          {/* Slide-in panel — skips entrance animation when reopened via back-nav */}
           <motion.div
             key="avatar-panel"
-            initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+            initial={{ x: instant ? 0 : '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
             transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
             style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: '100%', background: C.white, zIndex: 201, overflow: 'hidden' }}
           >
@@ -100,6 +110,7 @@ export function AvatarSheet({ open, onClose }: AvatarSheetProps) {
                     onGoBranding={() => goTo('branding')}
                     onGoInvoiceDefaults={() => goTo('invoice-defaults')}
                     onGoArchived={() => goTo('archived')}
+                    onGoHelp={() => goTo('help')}
                   />
                 </motion.div>
               )}
@@ -144,7 +155,16 @@ export function AvatarSheet({ open, onClose }: AvatarSheetProps) {
                   initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
                   transition={ST} style={ABS}
                 >
-                  <ArchivedContent onBack={goBack} />
+                  <ArchivedContent onBack={goBack} onClose={onClose} />
+                </motion.div>
+              )}
+
+              {view === 'help' && (
+                <motion.div key="help"
+                  initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+                  transition={ST} style={ABS}
+                >
+                  <HelpContent onBack={goBack} />
                 </motion.div>
               )}
 
@@ -160,47 +180,59 @@ export function AvatarSheet({ open, onClose }: AvatarSheetProps) {
 
 function MenuContent({
   freelancerName, businessName, avatarInitial, archivedCount,
-  onClose, onGoEditProfile, onGoBranding, onGoInvoiceDefaults, onGoArchived,
+  onClose, onGoEditProfile, onGoBranding, onGoInvoiceDefaults, onGoArchived, onGoHelp,
 }: {
   freelancerName: string; businessName: string; avatarInitial: string;
   archivedCount: number; onClose: () => void;
   onGoEditProfile: () => void; onGoBranding: () => void;
-  onGoInvoiceDefaults: () => void; onGoArchived: () => void;
+  onGoInvoiceDefaults: () => void; onGoArchived: () => void; onGoHelp: () => void;
 }) {
+  const navigate = useNavigate();
+  const { setHasLaunched } = useApp();
+
+  const handleSignOut = () => {
+    setHasLaunched(false);
+    onClose();
+    setTimeout(() => navigate('/'), 50);
+  };
+
   return (
     <div style={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', background: C.white }}>
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-        <span style={{ fontSize: '17px', fontWeight: 700, color: C.black, letterSpacing: '-0.02em' }}>Profile</span>
-        <CloseButton onClick={onClose} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', flexShrink: 0 }}>
+        <span style={{ fontSize: T.title.fontSize, fontWeight: 700, color: C.black, letterSpacing: '-0.02em' }}>Profile</span>
+        {/* × Light context close — 16px icon, 36×36 circle, 44×44 tap target */}
+        <LightModalBtn onClick={onClose} ariaLabel="Close" style={{ marginRight: -6 }}>
+          <X size={16} strokeWidth={2.5} />
+        </LightModalBtn>
       </div>
 
       {/* Identity block */}
-      <div style={{ padding: '18px 16px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+      <div style={{ padding: '24px 20px 24px', display: 'flex', alignItems: 'center', gap: 14 }}>
         <div style={{ width: 52, height: 52, borderRadius: '50%', background: C.quoting, flexShrink: 0, border: `1.5px solid ${C.black}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: '20px', fontWeight: 700, color: C.black }}>{avatarInitial}</span>
+          <span style={{ fontSize: T.avatar.fontSize, fontWeight: 700, color: C.black }}>{avatarInitial}</span>
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: '15px', fontWeight: 700, color: C.black, margin: '0 0 2px', letterSpacing: '-0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{freelancerName}</p>
-          <p style={{ fontSize: '13px', color: C.muted, margin: '0 0 8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{businessName}</p>
-          <EditProfileBtn onClick={onGoEditProfile} />
+        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+          <p style={{ fontSize: T.title.fontSize, fontWeight: 700, color: C.black, margin: 0, letterSpacing: '-0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{freelancerName}</p>
+          <p style={{ fontSize: '13px', color: C.muted, margin: '1px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{businessName}</p>
+          <InlineEditProfileBtn onClick={onGoEditProfile} />
         </div>
       </div>
 
       <Divider />
-      <SectionLabel>Your setup</SectionLabel>
-      <SheetRow icon={<Palette size={18} color={C.muted} strokeWidth={1.75} />} label="Branding" onClick={onGoBranding} />
-      <SheetRow icon={<FileText size={18} color={C.muted} strokeWidth={1.75} />} label="Invoice defaults" onClick={onGoInvoiceDefaults} last />
+      <SectionLabel>Customise</SectionLabel>
+      <SheetRow icon={<Palette size={22} color="rgba(10,10,10,0.6)" strokeWidth={1.75} />} label="Logo & style" onClick={onGoBranding} />
+      <SheetRow icon={<FileText size={22} color="rgba(10,10,10,0.6)" strokeWidth={1.75} />} label="Invoice setup" onClick={onGoInvoiceDefaults} last />
 
       <Divider />
       <SectionLabel>Projects</SectionLabel>
-      <SheetRow icon={<Archive size={18} color={C.muted} strokeWidth={1.75} />} label="Archived projects" badge={archivedCount > 0 ? String(archivedCount) : undefined} onClick={onGoArchived} last />
+      <SheetRow icon={<Archive size={22} color="rgba(10,10,10,0.6)" strokeWidth={1.75} />} label="Archived projects" badge={archivedCount > 0 ? String(archivedCount) : undefined} onClick={onGoArchived} last />
 
       <Divider />
       <SectionLabel>Account</SectionLabel>
-      <SheetRow icon={<HelpCircle size={18} color={C.muted} strokeWidth={1.75} />} label="Help" onClick={onClose} />
-      <SheetRow icon={<LogOut size={18} color={C.danger} strokeWidth={1.75} />} label="Sign out" labelColor={C.danger} onClick={onClose} last noChevron hoverBg="#FEF2F2" activeBg="#FEE2E2" />
+      <SheetRow icon={<HelpCircle size={22} color="rgba(10,10,10,0.6)" strokeWidth={1.75} />} label="Help" onClick={onGoHelp} />
+      <SheetRow icon={<LogOut size={22} color={C.danger} strokeWidth={1.75} />} label="Sign out" labelColor={C.danger} onClick={handleSignOut} last noChevron hoverBg={C.dangerLight} activeBg={C.dangerLight} />
 
       <div style={{ height: 'calc(env(safe-area-inset-bottom, 0px) + 24px)' }} />
     </div>
@@ -233,7 +265,7 @@ function EditProfileContent({
         {/* Avatar preview */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 0 20px' }}>
           <div style={{ width: 64, height: 64, borderRadius: '50%', background: C.quoting, border: `2px solid ${C.black}`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-            <span style={{ fontSize: '24px', fontWeight: 700, color: C.black }}>{initial2}</span>
+            <span style={{ fontSize: T.xl.fontSize, fontWeight: 700, color: C.black }}>{initial2}</span>
           </div>
           <p style={{ fontSize: '11px', color: C.muted, margin: 0 }}>Your initial is shown in the app</p>
         </div>
@@ -254,6 +286,8 @@ function EditProfileContent({
         <button
           onClick={handleSave}
           disabled={!name.trim()}
+          onMouseEnter={e => { if (name.trim() && !saved) e.currentTarget.style.background = '#2A2A2A'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = saved ? C.cleared : C.black; }}
           style={{
             width: '100%', height: 48,
             background: saved ? C.cleared : C.black,
@@ -265,7 +299,7 @@ function EditProfileContent({
             transition: 'background 200ms, color 200ms, opacity 150ms',
           }}
         >
-          {saved ? 'Saved ✓' : 'Save changes'}
+          {saved ? 'Saved ✓' : 'Save'}
         </button>
       </div>
     </div>
@@ -303,7 +337,7 @@ function BrandingContent({ onBack }: { onBack: () => void }) {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.surface }}>
-      <SubViewHeader title="Branding" onBack={onBack} />
+      <SubViewHeader title="Logo & style" onBack={onBack} />
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
 
         {/* Logo */}
@@ -313,7 +347,10 @@ function BrandingContent({ onBack }: { onBack: () => void }) {
               <img src={settings.logoUrl} alt="Logo" style={{ width: 48, height: 48, borderRadius: R.md, objectFit: 'contain', background: C.surface }} />
               <div>
                 <p style={{ fontSize: '13px', fontWeight: 500, color: C.black, margin: '0 0 4px' }}>Logo uploaded</p>
-                <button onClick={() => update({ logoUrl: undefined })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, fontSize: '13px', fontWeight: 500, padding: 0 }}>Remove</button>
+                <button onClick={() => update({ logoUrl: undefined })}
+                  onMouseEnter={e => (e.currentTarget.style.color = C.danger)}
+                  onMouseLeave={e => (e.currentTarget.style.color = C.muted)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, fontSize: '13px', fontWeight: 500, padding: 0, transition: 'color 150ms' }}>Remove</button>
               </div>
             </div>
           ) : (
@@ -324,7 +361,7 @@ function BrandingContent({ onBack }: { onBack: () => void }) {
               </div>
               <div style={{ textAlign: 'center' }}>
                 <span style={{ fontSize: '13px', fontWeight: 600, color: C.black, display: 'block' }}>Upload logo</span>
-                <span style={{ fontSize: '11px', color: C.muted }}>PNG or SVG · shown on all invoices</span>
+                <span style={{ fontSize: '11px', color: C.muted }}>PNG or SVG · shown on all invoices and quotes</span>
               </div>
             </label>
           )}
@@ -335,7 +372,9 @@ function BrandingContent({ onBack }: { onBack: () => void }) {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14 }}>
             {PRESET_COLORS.map(color => (
               <button key={color} onClick={() => update({ brandColor: color })}
-                style={{ width: 28, height: 28, borderRadius: R.md, background: color, border: `1.5px solid ${C.black}`, cursor: 'pointer', flexShrink: 0, outline: settings.brandColor === color ? `2px solid ${C.black}` : 'none', outlineOffset: 2, transition: 'outline 120ms' }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.15)'; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
+                style={{ width: 28, height: 28, borderRadius: R.md, background: color, border: `1.5px solid ${C.black}`, cursor: 'pointer', flexShrink: 0, outline: settings.brandColor === color ? `2px solid ${C.black}` : 'none', outlineOffset: 2, transition: 'outline 120ms, transform 150ms' }}
               />
             ))}
           </div>
@@ -370,6 +409,8 @@ function BrandingContent({ onBack }: { onBack: () => void }) {
               const active = settings.invoiceStyle === style;
               return (
                 <button key={style} onClick={() => update({ invoiceStyle: style })}
+                  onMouseEnter={e => { if (!active) e.currentTarget.style.borderColor = C.borderStrong; }}
+                  onMouseLeave={e => { if (!active) e.currentTarget.style.borderColor = C.border; }}
                   style={{ flex: 1, border: `1.5px solid ${active ? C.black : C.border}`, borderRadius: R.md, overflow: 'hidden', cursor: 'pointer', background: 'transparent', padding: 0, transition: 'border-color 150ms' }}
                 >
                   <div style={{ height: 52, display: 'flex', flexDirection: 'column' }}>
@@ -404,7 +445,7 @@ function BrandingContent({ onBack }: { onBack: () => void }) {
             transition: 'background 200ms, color 200ms',
           }}
         >
-          {saved ? 'Saved ✓' : 'Save branding'}
+          {saved ? 'Saved ✓' : 'Save'}
         </button>
       </div>
     </div>
@@ -434,10 +475,12 @@ function InvoiceDefaultsContent({ onBack, onGoBranding }: { onBack: () => void; 
   };
 
   const currSymbol =
-    defaults.defaultCurrency === 'GBP' ? '£' :
-    defaults.defaultCurrency === 'USD' ? '$' :
-    defaults.defaultCurrency === 'EUR' ? '€' :
-    defaults.defaultCurrency === 'INR' ? '₹' : defaults.defaultCurrency;
+    defaults.defaultCurrency === 'GBP' ? '£'  :
+    defaults.defaultCurrency === 'USD' ? '$'  :
+    defaults.defaultCurrency === 'EUR' ? '€'  :
+    defaults.defaultCurrency === 'INR' ? '₹'  :
+    defaults.defaultCurrency === 'AUD' ? 'A$' :
+    defaults.defaultCurrency === 'CAD' ? 'C$' : defaults.defaultCurrency;
 
   const handleSave = () => {
     updateInvoiceDefaults(defaults);
@@ -450,28 +493,8 @@ function InvoiceDefaultsContent({ onBack, onGoBranding }: { onBack: () => void; 
 
       {/* Header — Branding shortcut as secondary small button */}
       <SubViewHeader
-        title="Invoice defaults"
+        title="Invoice setup"
         onBack={onBack}
-        right={
-          <button
-            onClick={onGoBranding}
-            onMouseEnter={e => (e.currentTarget.style.background = '#D4D4D4')}
-            onMouseLeave={e => (e.currentTarget.style.background = '#F0F0F0')}
-            style={{
-              height: 32, padding: '0 12px',
-              background: '#F0F0F0', color: C.black,
-              border: `1.5px solid ${C.black}`,
-              borderRadius: '12px',
-              cursor: 'pointer',
-              fontSize: '11px', fontWeight: 600,
-              letterSpacing: '0.01em',
-              marginRight: 12, flexShrink: 0,
-              transition: 'background 150ms',
-            }}
-          >
-            Branding
-          </button>
-        }
       />
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -558,18 +581,20 @@ function InvoiceDefaultsContent({ onBack, onGoBranding }: { onBack: () => void; 
           </div>
           <div>
             <label style={labelStyle}>Starting number</label>
-            <input className="ci" type="number" min={1}
+            <NumberInput
+              min={1}
               value={defaults.startingNumber ?? 1}
-              onChange={e => update({ startingNumber: Math.max(1, Number(e.target.value)) })}
-              style={inputStyle} />
+              onChange={val => update({ startingNumber: Math.max(1, Number(val)) })}
+              style={{ height: 44 }}
+            />
             <p style={{ fontSize: '11px', color: C.muted, marginTop: 6 }}>
               Your next invoice will be {defaults.invoicePrefix ?? 'INV'}-{String(defaults.startingNumber ?? 1).padStart(3, '0')}
             </p>
           </div>
         </PanelCard>
 
-        {/* ── 3. RATE CARD ─────────────────────────────────── */}
-        <PanelCard title="Rate card">
+        {/* ── 3. SERVICES ─────────────────────────────────── */}
+        <PanelCard title="Services">
           {defaults.rateCard.map((item, idx) => (
             <motion.div key={item.id}
               animate={shakingId === item.id ? { x: [0, -4, 4, -4, 4, 0] } : { x: 0 }}
@@ -580,6 +605,8 @@ function InvoiceDefaultsContent({ onBack, onGoBranding }: { onBack: () => void; 
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                 <span style={{ fontSize: '13px', fontWeight: 600, color: C.black }}>{currSymbol}{item.price.toLocaleString()}</span>
                 <button onClick={() => removeRateItem(item.id)}
+                  onMouseEnter={e => (e.currentTarget.style.color = C.danger)}
+                  onMouseLeave={e => (e.currentTarget.style.color = shakingId === item.id ? C.danger : C.borderStrong)}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: shakingId === item.id ? C.danger : C.borderStrong, padding: 2, display: 'flex', alignItems: 'center', transition: 'color 150ms' }}
                 ><X size={14} /></button>
               </div>
@@ -596,7 +623,9 @@ function InvoiceDefaultsContent({ onBack, onGoBranding }: { onBack: () => void; 
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                 <span style={{ fontSize: '13px', fontWeight: 500, color: C.black, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>{field.value}</span>
                 <button onClick={() => update({ customFields: defaults.customFields.filter(f => f.id !== field.id) })}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.borderStrong, padding: 2, display: 'flex', alignItems: 'center', flexShrink: 0 }}
+                  onMouseEnter={e => (e.currentTarget.style.color = C.danger)}
+                  onMouseLeave={e => (e.currentTarget.style.color = C.borderStrong)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.borderStrong, padding: 2, display: 'flex', alignItems: 'center', flexShrink: 0, transition: 'color 150ms' }}
                 ><X size={14} /></button>
               </div>
             </div>
@@ -607,12 +636,14 @@ function InvoiceDefaultsContent({ onBack, onGoBranding }: { onBack: () => void; 
         {/* ── 5. PAYMENT DEFAULTS ──────────────────────────── */}
         <PanelCard title="Payment defaults">
           <div style={{ marginBottom: 16 }}>
-            <label style={labelStyle}>Default due terms</label>
+            <label style={labelStyle}>Payment due within</label>
             <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
               {PAYMENT_TERMS.map(t => {
                 const active = defaults.defaultTerms === t.key;
                 return (
                   <button key={t.key} onClick={() => update({ defaultTerms: t.key })}
+                    onMouseEnter={e => { if (!active) { e.currentTarget.style.borderColor = C.black; e.currentTarget.style.color = C.black; } }}
+                    onMouseLeave={e => { if (!active) { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; } }}
                     style={{ flex: 1, padding: '8px 0', border: `1.5px solid ${active ? C.black : C.border}`, borderRadius: R.xl, background: active ? C.black : C.white, cursor: 'pointer', fontSize: '11px', fontWeight: 700, color: active ? C.white : C.muted, transition: 'all 120ms' }}
                   >
                     {t.label}
@@ -628,7 +659,12 @@ function InvoiceDefaultsContent({ onBack, onGoBranding }: { onBack: () => void; 
               <select className="ci" value={defaults.defaultCurrency} onChange={e => update({ defaultCurrency: e.target.value })}
                 style={{ ...inputStyle, paddingRight: 32, appearance: 'none', cursor: 'pointer', height: 44 }}
               >
-                {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                <option value="GBP">£  GBP — British Pound</option>
+                <option value="USD">$  USD — US Dollar</option>
+                <option value="EUR">€  EUR — Euro</option>
+                <option value="INR">₹  INR — Indian Rupee</option>
+                <option value="AUD">A$  AUD — Australian Dollar</option>
+                <option value="CAD">C$  CAD — Canadian Dollar</option>
               </select>
               <ChevronDown size={14} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: C.muted }} />
             </div>
@@ -651,7 +687,9 @@ function InvoiceDefaultsContent({ onBack, onGoBranding }: { onBack: () => void; 
                 const active = defaults.defaultQuoteExpiry === days;
                 return (
                   <button key={days} onClick={() => update({ defaultQuoteExpiry: days })}
-                    style={{ flex: 1, padding: '8px 0', border: `1.5px solid ${active ? C.black : C.border}`, borderRadius: R.xl, background: active ? C.black : C.white, cursor: 'pointer', fontSize: '12px', fontWeight: 700, color: active ? C.white : C.muted, transition: 'all 120ms' }}
+                    onMouseEnter={e => { if (!active) { e.currentTarget.style.borderColor = C.black; e.currentTarget.style.color = C.black; } }}
+                    onMouseLeave={e => { if (!active) { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; } }}
+                    style={{ flex: 1, padding: '8px 0', border: `1.5px solid ${active ? C.black : C.border}`, borderRadius: R.xl, background: active ? C.black : C.white, cursor: 'pointer', fontSize: T.pill.fontSize, fontWeight: 700, color: active ? C.white : C.muted, transition: 'all 120ms' }}
                   >
                     {days} days
                   </button>
@@ -668,6 +706,51 @@ function InvoiceDefaultsContent({ onBack, onGoBranding }: { onBack: () => void; 
             />
             <p style={{ fontSize: '11px', color: C.muted, marginTop: 4 }}>Shown at the bottom of every quote you send</p>
           </div>
+        </PanelCard>
+
+        {/* ── 7. TAX ───────────────────────────────────────── */}
+        <PanelCard title="Tax">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: defaults.taxEnabled ? 16 : 0 }}>
+            <label style={{ fontSize: '13px', fontWeight: 500, color: C.black }}>Add tax to invoices</label>
+            <SheetToggle checked={!!defaults.taxEnabled} onChange={(v) => update({ taxEnabled: v })} />
+          </div>
+          {defaults.taxEnabled && (
+            <>
+              <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={labelStyle}>Tax name</label>
+                  <input className="ci"
+                    value={defaults.taxLabel ?? ''}
+                    onChange={e => update({ taxLabel: e.target.value })}
+                    placeholder="e.g. VAT, GST"
+                    style={inputStyle}
+                    onFocus={e => (e.currentTarget.style.borderColor = C.black)}
+                    onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+                  />
+                </div>
+                <div style={{ width: 90 }}>
+                  <label style={labelStyle}>Rate</label>
+                  <div style={{ position: 'relative' }}>
+                    <input className="ci"
+                      type="number" min={0} max={100}
+                      value={defaults.taxRate ?? 20}
+                      onChange={e => update({ taxRate: Number(e.target.value) })}
+                      placeholder="20"
+                      style={{ ...inputStyle, paddingRight: 28 }}
+                      onFocus={e => (e.currentTarget.style.borderColor = C.black)}
+                      onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+                    />
+                    <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: '13px', color: C.muted, pointerEvents: 'none' }}>%</span>
+                  </div>
+                </div>
+              </div>
+              {defaults.taxLabel && (
+                <p style={{ fontSize: '11px', color: C.muted, margin: 0, lineHeight: 1.5 }}>
+                  Shown on invoice as: <strong style={{ color: C.black }}>{defaults.taxLabel} {defaults.taxRate ?? 0}%</strong>
+                </p>
+              )}
+            </>
+          )}
         </PanelCard>
 
       </div>
@@ -688,7 +771,7 @@ function InvoiceDefaultsContent({ onBack, onGoBranding }: { onBack: () => void; 
             transition: 'background 200ms, color 200ms',
           }}
         >
-          {saved ? 'Saved ✓' : 'Save changes'}
+          {saved ? 'Saved ✓' : 'Save'}
         </button>
       </div>
 
@@ -723,14 +806,31 @@ function InvoiceDefaultsContent({ onBack, onGoBranding }: { onBack: () => void; 
 
 /* ── Archived content ─────────────────────────────────────── */
 
-function ArchivedContent({ onBack }: { onBack: () => void }) {
-  const { projects, updateProject, deleteProject } = useApp();
+function ArchivedContent({ onBack, onClose }: { onBack: () => void; onClose: () => void }) {
+  const { projects, deleteProject, restoreProject } = useApp();
+  const navigate = useNavigate();
+
+  // Tapping a card from the Archived panel:
+  // 1. Write the sessionStorage flag so ProjectList reopens on Archived when we return.
+  // 2. Navigate only — React Router unmounts ProjectList (and therefore AvatarSheet) in the
+  //    same render. We deliberately do NOT call onClose(): that would cause AnimatePresence
+  //    to start the sheet's slide-out for 1-2 frames before the parent unmounts, which is
+  //    the visual mis-match vs. the clean snap users see from active/cleared cards.
+  const handleCardClick = (id: string) => {
+    sessionStorage.setItem('clear_reopen_sheet', 'archived');
+    navigate(`/projects/${id}`);
+  };
+
+  // One-tap restore: returns project to its pre-archive status, no picker needed.
+  const handleRestore = (id: string) => {
+    restoreProject(id);
+    toast.success('Restored');
+  };
+
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
-  const [bottomSheetId, setBottomSheetId]   = useState<string | null>(null);
 
   const archivedProjects = projects.filter(p => p.status === 'archived');
   const deleteTarget     = projects.find(p => p.id === deleteTargetId);
-  const selectedProject  = projects.find(p => p.id === bottomSheetId);
 
   return (
     <div style={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column', background: C.surface }}>
@@ -756,12 +856,13 @@ function ArchivedContent({ onBack }: { onBack: () => void }) {
                 >
                   <ProjectCard
                     project={p} isOverdue={false}
-                    onStatusTap={() => setBottomSheetId(p.id)}
+                    onStatusTap={() => {}}
                     onAdvanceStatus={() => {}}
                     onRequestClear={() => {}}
                     onDeleteRequest={() => setDeleteTargetId(p.id)}
                     onArchive={() => {}}
-                    onRestore={() => setBottomSheetId(p.id)}
+                    onRestore={() => handleRestore(p.id)}
+                    onCardClick={handleCardClick}
                   />
                 </motion.div>
               ))}
@@ -770,31 +871,81 @@ function ArchivedContent({ onBack }: { onBack: () => void }) {
         )}
       </div>
 
-      {selectedProject && (
-        <BottomSheet
-          open={!!bottomSheetId}
-          onClose={() => setBottomSheetId(null)}
-          title={selectedProject.clientName}
-          currentStatus={selectedProject.status}
-          onSelectStatus={status => {
-            updateProject(selectedProject.id, { status });
-            setBottomSheetId(null);
-          }}
-        />
-      )}
-
-      <ConfirmModal
+      <DeleteModal
         open={!!deleteTargetId && !!deleteTarget}
         onClose={() => setDeleteTargetId(null)}
-        icon={<Trash2 size={22} color={C.danger} strokeWidth={2} />}
-        iconBg={C.dangerLight}
-        title="Delete project?"
-        description={<><strong style={{ color: C.black }}>{deleteTarget?.clientName}</strong>{' — '}{deleteTarget?.type} will be permanently removed.</>}
-        confirmLabel="Delete"
-        confirmBg={C.danger}
-        confirmIcon={<Trash2 size={15} />}
-        onConfirm={() => { if (deleteTargetId) { deleteProject(deleteTargetId); setDeleteTargetId(null); } }}
+        clientName={deleteTarget?.clientName ?? ''}
+        body="There's no way to get it back."
+        onDelete={() => { if (deleteTargetId) { deleteProject(deleteTargetId); setDeleteTargetId(null); } }}
       />
+    </div>
+  );
+}
+
+/* ── Help content ─────────────────────────────────────────── */
+
+const FAQS = [
+  {
+    q: 'How do I send a quote?',
+    a: 'Open a project and scroll to the Quote section. Tap Generate quote, review the details, then tap Send quote to copy a shareable link.',
+  },
+  {
+    q: 'How do I mark a project as cleared?',
+    a: 'Once payment arrives, open the project and tap Mark as cleared. The project moves to your Cleared tab permanently.',
+  },
+  {
+    q: 'How do I add my bank details to invoices?',
+    a: 'Tap your avatar → Invoice defaults → Payment defaults. Add your details in Default payment notes. They appear on every invoice automatically.',
+  },
+];
+
+function HelpContent({ onBack }: { onBack: () => void }) {
+  const [expanded, setExpanded] = useState<number | null>(null);
+
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.surface }}>
+      <SubViewHeader title="Help" onBack={onBack} />
+      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px 40px' }}>
+        <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: '12px', overflow: 'hidden' }}>
+          {FAQS.map((faq, i) => {
+            const open = expanded === i;
+            const isLast = i === FAQS.length - 1;
+            return (
+              <div key={i} style={{ borderBottom: isLast ? 'none' : `1px solid ${C.border}` }}>
+                <button
+                  onClick={() => setExpanded(open ? null : i)}
+                  onMouseEnter={e => (e.currentTarget.style.background = C.surface)}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                  style={{
+                    width: '100%', minHeight: 52,
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '0 16px', gap: 12,
+                    background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
+                    transition: 'background 150ms',
+                  }}
+                >
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: C.black, lineHeight: 1.5 }}>{faq.q}</span>
+                  <ChevronRight
+                    size={16} color={C.muted} strokeWidth={2}
+                    style={{
+                      flexShrink: 0,
+                      transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
+                      transition: 'transform 200ms ease-in-out',
+                    } as React.CSSProperties}
+                  />
+                </button>
+                <div style={{ maxHeight: open ? 200 : 0, overflow: 'hidden', transition: 'max-height 220ms ease-in-out' }}>
+                  <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}` }}>
+                    <p style={{ fontSize: '13px', fontWeight: 400, color: '#7A8099', lineHeight: 1.6, margin: 0 }}>
+                      {faq.a}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -835,27 +986,40 @@ function PanelAddModal({ open, onClose, onAdd, title, fields }: {
               style={{ width: '100%', background: C.white, borderRadius: R.lg, padding: '20px 16px', boxShadow: '0 8px 40px rgba(0,0,0,0.18)', pointerEvents: 'auto' }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-                <p style={{ fontSize: '17px', fontWeight: 700, color: C.black, margin: 0, letterSpacing: '-0.02em' }}>{title}</p>
-                <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: '50%', background: C.surface, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
-                  <X size={15} color={C.black} />
-                </button>
+                <p style={{ fontSize: T.title.fontSize, fontWeight: 700, color: C.black, margin: 0, letterSpacing: '-0.02em' }}>{title}</p>
+                {/* × Light context close — 16px icon, 36×36 circle, 44×44 tap target */}
+                <LightModalBtn onClick={onClose} ariaLabel="Close" style={{ marginRight: -4 }}>
+                  <X size={16} strokeWidth={2.5} />
+                </LightModalBtn>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {fields.map(field => (
                   <div key={field.key}>
                     <label style={labelStyle}>{field.label}</label>
-                    <input
-                      placeholder={field.placeholder} type={field.type}
-                      value={values[field.key] || ''}
-                      onChange={e => setValues(prev => ({ ...prev, [field.key]: e.target.value }))}
-                      style={{ ...inputStyle, height: 48 }}
-                      onFocus={e => e.currentTarget.style.borderColor = C.black}
-                      onBlur={e => e.currentTarget.style.borderColor = C.border}
-                    />
+                    {field.type === 'number' ? (
+                      <NumberInput
+                        placeholder={field.placeholder}
+                        value={values[field.key] || ''}
+                        onChange={val => setValues(prev => ({ ...prev, [field.key]: val }))}
+                        style={{ height: 48 }}
+                      />
+                    ) : (
+                      <input
+                        placeholder={field.placeholder} type={field.type}
+                        value={values[field.key] || ''}
+                        onChange={e => setValues(prev => ({ ...prev, [field.key]: e.target.value }))}
+                        style={{ ...inputStyle, height: 48 }}
+                        onFocus={e => e.currentTarget.style.borderColor = C.black}
+                        onBlur={e => e.currentTarget.style.borderColor = C.border}
+                      />
+                    )}
                   </div>
                 ))}
               </div>
-              <button onClick={handleAdd} style={{ width: '100%', height: 48, background: C.black, color: C.white, border: 'none', borderRadius: R.xl, cursor: 'pointer', fontSize: '14px', fontWeight: 700, letterSpacing: '-0.01em', marginTop: 20 }}>
+              <button onClick={handleAdd}
+                onMouseEnter={e => (e.currentTarget.style.background = '#2A2A2A')}
+                onMouseLeave={e => (e.currentTarget.style.background = C.black)}
+                style={{ width: '100%', height: 48, background: C.black, color: C.white, border: 'none', borderRadius: R.xl, cursor: 'pointer', fontSize: T.input.fontSize, fontWeight: 700, letterSpacing: '-0.01em', marginTop: 20, transition: 'background 150ms' }}>
                 Add
               </button>
             </motion.div>
@@ -871,10 +1035,11 @@ function PanelAddModal({ open, onClose, onAdd, title, fields }: {
 function SubViewHeader({ title, onBack, right }: { title: string; onBack: () => void; right?: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', padding: '0 0 0 4px', borderBottom: `1px solid ${C.border}`, flexShrink: 0, minHeight: 52, background: C.white }}>
-      <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.black, display: 'flex', alignItems: 'center', padding: '4px 8px 4px 12px', minHeight: 52 }} aria-label="Back">
-        <ChevronLeft size={22} strokeWidth={2.5} />
-      </button>
-      <span style={{ flex: 1, fontSize: '17px', fontWeight: 700, color: C.black, letterSpacing: '-0.02em' }}>{title}</span>
+      {/* ‹ Light context back — 18px icon, 36×36 circle, 44×44 tap target */}
+      <LightModalBtn onClick={onBack} ariaLabel="Back">
+        <ChevronLeft size={18} strokeWidth={2.5} />
+      </LightModalBtn>
+      <span style={{ flex: 1, fontSize: T.title.fontSize, fontWeight: 700, color: C.black, letterSpacing: '-0.02em' }}>{title}</span>
       {right}
     </div>
   );
@@ -891,7 +1056,10 @@ function PanelCard({ title, children }: { title: string; children: React.ReactNo
 
 function AddRowButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <button onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 10, background: 'none', border: 'none', cursor: 'pointer', minHeight: 44, width: '100%' }}>
+    <button onClick={onClick}
+      onMouseEnter={e => (e.currentTarget.style.background = C.surface)}
+      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+      style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 10, paddingBottom: 4, background: 'transparent', border: 'none', cursor: 'pointer', minHeight: 44, width: '100%', borderRadius: R.sm, transition: 'background 150ms' }}>
       <div style={{ width: 20, height: 20, borderRadius: R.pill, background: C.surface, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         <Plus size={12} color={C.black} />
       </div>
@@ -905,7 +1073,7 @@ function Divider() {
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.muted, padding: '12px 16px 4px', flexShrink: 0 }}>{children}</div>;
+  return <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.muted, padding: '16px 20px 8px', flexShrink: 0 }}>{children}</div>;
 }
 
 interface SheetRowProps {
@@ -932,17 +1100,17 @@ function SheetRow({ icon, label, labelColor, badge, onClick, last, noChevron, ho
         display: 'flex', alignItems: 'center', gap: 14, height: 52,
         width: '100%', border: 'none',
         borderBottom: last ? 'none' : `1px solid ${C.border}`,
-        background: bg, cursor: 'pointer', padding: '0 16px',
+        background: bg, cursor: 'pointer', padding: '0 20px',
         transition: 'background 150ms ease-in-out',
         textAlign: 'left', flexShrink: 0,
       }}
     >
       <div style={{ width: 20, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</div>
-      <span style={{ flex: 1, fontSize: '14px', fontWeight: 500, color: labelColor || C.black }}>{label}</span>
+      <span style={{ flex: 1, fontSize: '15px', fontWeight: 500, color: labelColor || C.black }}>{label}</span>
       {badge && <span style={{ fontSize: '11px', fontWeight: 600, color: C.muted, background: C.surface, padding: '2px 8px', borderRadius: R.pill, border: `1px solid ${C.border}`, marginRight: 4 }}>{badge}</span>}
       {!noChevron && (
         <ChevronRight
-          size={15} color={C.borderStrong} strokeWidth={2}
+          size={14} color="rgba(10,10,10,0.4)" strokeWidth={2.5}
           style={{ transition: 'transform 150ms ease-in-out', transform: hovered ? 'translateX(2px)' : 'translateX(0)' } as React.CSSProperties}
         />
       )}
@@ -952,38 +1120,7 @@ function SheetRow({ icon, label, labelColor, badge, onClick, last, noChevron, ho
 
 /* ── Shared styles ────────────────────────────────────────── */
 
-function CloseButton({ onClick }: { onClick: () => void }) {
-  const [hovered, setHovered] = useState(false);
-  const [pressed, setPressed] = useState(false);
-  return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => { setHovered(false); setPressed(false); }}
-      onPointerDown={() => setPressed(true)}
-      onPointerUp={() => setPressed(false)}
-      aria-label="Close"
-      style={{
-        width: 44, height: 44,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'transparent', border: 'none', cursor: 'pointer',
-        padding: 0, position: 'relative', flexShrink: 0,
-        marginRight: -10,
-      }}
-    >
-      <span style={{
-        position: 'absolute',
-        width: 32, height: 32,
-        borderRadius: '50%',
-        background: pressed ? '#E8E8E8' : hovered ? '#F0F0F0' : 'transparent',
-        transform: pressed ? 'scale(0.98)' : 'scale(1)',
-        transition: 'background 150ms ease-in-out, transform 150ms ease-in-out',
-        pointerEvents: 'none',
-      }} />
-      <X size={14} color="#0A0A0A" strokeWidth={2.5} style={{ position: 'relative', zIndex: 1 } as React.CSSProperties} />
-    </button>
-  );
-}
+
 
 function EditProfileBtn({ onClick }: { onClick: () => void }) {
   const [hovered, setHovered] = useState(false);
@@ -1001,12 +1138,64 @@ function EditProfileBtn({ onClick }: { onClick: () => void }) {
         background: pressed ? '#BEBEBE' : hovered ? '#D4D4D4' : '#F0F0F0',
         border: '1.5px solid #0A0A0A',
         borderRadius: '12px', cursor: 'pointer',
-        fontSize: '12px', fontWeight: 600, color: '#0A0A0A',
+        fontSize: T.pill.fontSize, fontWeight: 600, color: '#0A0A0A',
         transform: pressed ? 'scale(0.98)' : 'scale(1)',
         transition: 'background 150ms ease-in-out, transform 150ms ease-in-out',
       }}
     >
       <User size={11} strokeWidth={2.5} /> Edit profile
+    </button>
+  );
+}
+
+function InlineEditProfileBtn({ onClick }: { onClick: () => void }) {
+  const [hov, setHov] = useState(false);
+  const [prs, setPrs] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => { setHov(false); setPrs(false); }}
+      onPointerDown={() => setPrs(true)}
+      onPointerUp={() => setPrs(false)}
+      style={{
+        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+        fontSize: '13px', fontWeight: 500,
+        color: prs ? 'rgba(10,10,10,0.5)' : hov ? 'rgba(10,10,10,0.65)' : C.black,
+        marginTop: 4, display: 'inline-block', textAlign: 'left',
+        textDecoration: hov ? 'underline' : 'none',
+        textUnderlineOffset: '2px',
+        transition: 'color 120ms ease-in-out',
+      }}
+    >
+      Edit profile →
+    </button>
+  );
+}
+
+
+
+/* ── Sheet toggle switch ──────────────────────────────────── */
+function SheetToggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      onClick={() => onChange(!checked)}
+      style={{
+        width: 44, height: 24, borderRadius: 12,
+        background: checked ? C.black : C.border,
+        border: 'none', cursor: 'pointer', padding: 0,
+        position: 'relative', flexShrink: 0,
+        transition: 'background 200ms',
+      }}
+      aria-checked={checked}
+      role="switch"
+    >
+      <div style={{
+        width: 18, height: 18, borderRadius: 9, background: C.white,
+        position: 'absolute', top: 3,
+        left: checked ? 23 : 3,
+        transition: 'left 200ms',
+      }} />
     </button>
   );
 }
@@ -1020,7 +1209,7 @@ const labelStyle: React.CSSProperties = {
 const inputStyle: React.CSSProperties = {
   width: '100%', height: 44, background: C.white,
   border: `1px solid ${C.border}`, borderRadius: R.md,
-  padding: '0 12px', fontSize: '14px', color: C.black,
+  padding: '0 12px', fontSize: T.input.fontSize, color: C.black,
   outline: 'none', fontFamily: 'inherit',
   boxSizing: 'border-box', transition: 'border-color 150ms',
 };

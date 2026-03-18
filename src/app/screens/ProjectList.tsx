@@ -8,31 +8,77 @@ import { ProjectCard } from '../components/ProjectCard';
 import { BottomSheet } from '../components/BottomSheet';
 import { AvatarSheet } from '../components/AvatarSheet';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { Modal } from '../components/Modal';
+import { Btn } from '../components/ui/Btn';
+import { DeleteModal } from '../components/DeleteModal';
 import { Project } from '../types';
 
 type Tab = 'active' | 'cleared';
-const TAB_INDEX: Record<Tab, number> = { active: 0, cleared: 1 };
 
 /* ── Search helper ──────────────────────────────────────── */
 function matchesSearch(q: string) {
   const lower = q.toLowerCase();
-  return (p: Project) =>
-    p.clientName.toLowerCase().includes(lower) ||
-    p.type.toLowerCase().includes(lower) ||
-    p.amount.toString().includes(lower);
+  return (p: Project) => {
+    const serviceNames = (p.services ?? []).map(s => s.name.toLowerCase()).join(' ');
+    return (
+      p.clientName.toLowerCase().includes(lower) ||
+      p.type.toLowerCase().includes(lower) ||
+      serviceNames.includes(lower) ||
+      p.amount.toString().includes(lower)
+    );
+  };
 }
 
+// Module-level mutable var used ONLY to pass a value between two lazy useState
+// initialisers inside the same synchronous mount. Safe because React runs both
+// initialisers back-to-back before any re-render.
+let _pendingSheetView: 'menu' | 'archived' = 'menu';
+
 export default function ProjectList() {
-  const { projects, advanceStatus, updateProject, deleteProject, isOverdue } = useApp();
+  const { projects, advanceStatus, updateProject, deleteProject, isOverdue, archiveProject } = useApp();
   const navigate = useNavigate();
 
   const { branding } = useApp();
   const avatarInitial = (branding.freelancerName || branding.businessName || 'K')[0].toUpperCase();
 
-  const [tab, setTab]                         = useState<Tab>('active');
+  // Tab is persisted in sessionStorage so it survives the unmount/remount that
+  // happens when navigating to ProjectDetail and back — with no history-stack pollution.
+  const [tab, setTab] = useState<Tab>(() => {
+    const saved = sessionStorage.getItem('clear_project_tab');
+    return saved === 'cleared' ? 'cleared' : 'active';
+  });
+
+  // Always keep sessionStorage in sync so navigate(-1) from ProjectDetail
+  // naturally restores the correct tab on remount.
+  const handleTabChange = (next: Tab) => {
+    setTab(next);
+    sessionStorage.setItem('clear_project_tab', next);
+  };
   const [searchQuery, setSearchQuery]         = useState('');
   const [searchFocused, setSearchFocused]     = useState(false);
-  const [avatarOpen, setAvatarOpen]           = useState(false);
+  // Consume the sessionStorage flag written by AvatarSheet's ArchivedContent.
+  // Both initialisers run before React processes any re-renders, so we read the
+  // flag in the first one, delete it, and pass the result into the second via a
+  // module-scoped variable that lives only for this mount.
+  // Read the sessionStorage flag once on mount. If set, open the sheet immediately
+  // on the Archived panel with no entrance animation (back-nav reopen).
+  const [avatarOpen, setAvatarOpen] = useState<boolean>(() => {
+    const flag = sessionStorage.getItem('clear_reopen_sheet');
+    if (flag === 'archived') {
+      sessionStorage.removeItem('clear_reopen_sheet');
+      _pendingSheetView = 'archived';
+      return true;
+    }
+    _pendingSheetView = 'menu';
+    return false;
+  });
+  const [avatarInitialView, setAvatarInitialView] = useState<'menu' | 'archived'>(
+    () => _pendingSheetView,
+  );
+  // True when the sheet was reopened via back-nav (skip entrance slide animation).
+  const [avatarInstant, setAvatarInstant] = useState<boolean>(
+    () => _pendingSheetView === 'archived',
+  );
   const [bottomSheetId, setBottomSheetId]     = useState<string | null>(null);
   const [deleteTargetId, setDeleteTargetId]   = useState<string | null>(null);
   const [confirmClearId, setConfirmClearId]   = useState<string | null>(null);
@@ -68,7 +114,7 @@ export default function ProjectList() {
   };
 
   const handleArchive = (id: string) => {
-    updateProject(id, { status: 'archived' });
+    archiveProject(id);
     setArchiveTargetId(null);
   };
 
@@ -76,11 +122,8 @@ export default function ProjectList() {
     if (!confirmClearId) return;
     advanceStatus(confirmClearId);
     setConfirmClearId(null);
-    setTimeout(() => setTab('cleared'), 320);
+    setTimeout(() => handleTabChange('cleared'), 320);
   };
-
-  /* ── Pane translate: -50% per tab of 200%-wide container ── */
-  const xPct = `${-TAB_INDEX[tab] * 50}%`;
 
   /* ── Tab definitions ────────────────────────────────────── */
   const TABS: { key: Tab; label: string; count: number }[] = [
@@ -125,12 +168,15 @@ export default function ProjectList() {
           {/* Avatar circle */}
           <button
             onClick={() => setAvatarOpen(true)}
+            onMouseEnter={e => (e.currentTarget.style.filter = 'brightness(0.88)')}
+            onMouseLeave={e => (e.currentTarget.style.filter = 'brightness(1)')}
             style={{
               width: 32, height: 32, borderRadius: '50%',
               background: C.quoting,
               border: `1px solid ${C.black}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               cursor: 'pointer', flexShrink: 0,
+              transition: 'filter 150ms',
             }}
           >
             <span style={{ fontSize: '13px', fontWeight: 700, color: C.black }}>
@@ -146,7 +192,9 @@ export default function ProjectList() {
             return (
               <button
                 key={key}
-                onClick={() => setTab(key)}
+                onClick={() => handleTabChange(key)}
+                onMouseEnter={e => { if (!isActive) (e.currentTarget.querySelector('span') as HTMLElement | null)?.style && (e.currentTarget.style.opacity = '0.8'); }}
+                onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
                 style={{
                   flex: 1, background: 'none',
                   borderTop: 'none', borderRight: 'none',
@@ -155,24 +203,25 @@ export default function ProjectList() {
                   display: 'flex', alignItems: 'center',
                   justifyContent: 'center', gap: 6,
                   position: 'relative',
+                  transition: 'opacity 150ms',
                 }}
               >
                 <span style={{
-                  fontSize: '13px',
+                  fontSize: T.sm.fontSize,
                   fontWeight: isActive ? 600 : 400,
-                  color: isActive ? C.white : 'rgba(255,255,255,0.45)',
+                  color: isActive ? C.white : 'rgba(255,255,255,0.4)',
                   transition: 'color 180ms',
                 }}>
                   {label}
                 </span>
                 {count > 0 && (
                   <span style={{
-                    fontSize: '10px', fontWeight: 700,
-                    color: isActive ? C.white : 'rgba(255,255,255,0.45)',
+                    fontSize: T.label.fontSize, fontWeight: 600,
+                    color: isActive ? C.black : 'rgba(255,255,255,0.4)',
                     background: isActive
-                      ? 'rgba(255,255,255,0.15)'
-                      : 'rgba(255,255,255,0.08)',
-                    padding: '2px 6px', borderRadius: R.pill,
+                      ? C.invoiced
+                      : 'rgba(255,255,255,0.15)',
+                    padding: '1px 6px', borderRadius: 20,
                     transition: 'all 180ms',
                   }}>
                     {count}
@@ -183,7 +232,7 @@ export default function ProjectList() {
                     layoutId="tab-indicator"
                     style={{
                       position: 'absolute', bottom: 0, left: 0, right: 0,
-                      height: 2, background: C.white, borderRadius: 2,
+                      height: 3, background: C.invoiced, borderRadius: 2,
                     }}
                     transition={{ type: 'spring', stiffness: 500, damping: 40 }}
                   />
@@ -232,74 +281,88 @@ export default function ProjectList() {
         </div>
       </div>
 
-      {/* ── 2-pane sliding content ───────────────────────── */}
-      <main style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-        <motion.div
-          style={{ display: 'flex', width: '200%', height: '100%' }}
-          animate={{ x: xPct }}
-          transition={{ type: 'spring', stiffness: 380, damping: 38, mass: 0.8 }}
-        >
-
-          {/* Pane 1 — Active */}
-          <div style={{ width: '50%', overflowY: 'auto', padding: '8px 16px 100px' }}>
-            {activeProjects.length === 0 ? (
-              <EmptyState
-                title={searchQuery ? 'No results' : 'No active projects'}
-                subtitle={searchQuery ? 'Try a different search' : 'Add a project to get started'}
-                action={
-                  !searchQuery
-                    ? <button onClick={() => navigate('/projects/new')} style={emptyActionStyle}>+ New project</button>
-                    : undefined
-                }
-              />
+      {/* ── Tab content — only one pane in DOM at a time ────── */}
+      <main style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={tab}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.1 }}
+            style={{
+              position: 'absolute', inset: 0,
+              overflowY: 'auto', padding: '8px 16px 100px',
+            }}
+          >
+            {tab === 'active' ? (
+              activeProjects.length === 0 ? (
+                <EmptyState
+                  title={searchQuery ? 'No results' : 'No projects yet'}
+                  subtitle={searchQuery ? 'Try a different search' : 'Add your first project to get started.'}
+                  action={
+                    !searchQuery
+                      ? <button
+                          onClick={() => navigate('/projects/new')}
+                          style={emptyActionStyle}
+                          onMouseEnter={e => (e.currentTarget.style.background = '#2A2A2A')}
+                          onMouseLeave={e => (e.currentTarget.style.background = C.black)}
+                        >New project →</button>
+                      : undefined
+                  }
+                  showGuideCards={!searchQuery}
+                />
+              ) : (
+                <div role="list" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <AnimatePresence initial={false}>
+                    {activeProjects.map(p => (
+                      <motion.div
+                        key={p.id} layout
+                        initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, x: 48, transition: { duration: 0.2 } }}
+                        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                      >
+                        <ProjectCard
+                          project={p} isOverdue={isOverdue(p)}
+                          onStatusTap={() => setBottomSheetId(p.id)}
+                          onAdvanceStatus={() => advanceStatus(p.id)}
+                          onRequestClear={() => setConfirmClearId(p.id)}
+                          onDeleteRequest={() => setDeleteTargetId(p.id)}
+                          onArchive={() => setArchiveTargetId(p.id)}
+                          fromTab="active"
+                        />
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
+              )
             ) : (
-              <div role="list" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <AnimatePresence initial={false}>
-                  {activeProjects.map(p => (
-                    <motion.div
-                      key={p.id} layout
-                      initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, x: 48, transition: { duration: 0.2 } }}
-                      transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                    >
-                      <ProjectCard
-                        project={p} isOverdue={isOverdue(p)}
-                        onStatusTap={() => setBottomSheetId(p.id)}
-                        onAdvanceStatus={() => advanceStatus(p.id)}
-                        onRequestClear={() => setConfirmClearId(p.id)}
-                        onDeleteRequest={() => setDeleteTargetId(p.id)}
-                        onArchive={() => setArchiveTargetId(p.id)}
-                      />
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-              </div>
-            )}
-          </div>
-
-          {/* Pane 2 — Cleared */}
-          <div style={{ width: '50%', overflowY: 'auto', padding: '8px 16px 100px', opacity: 0.75 }}>
-            {clearedProjects.length === 0 ? (
-              <EmptyState
-                title={searchQuery ? 'No results' : 'No cleared projects yet'}
-                subtitle={searchQuery ? 'Try a different search' : 'Projects move here once fully cleared'}
-              />
-            ) : (
-              <div role="list" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {clearedProjects.map(p => (
-                  <ProjectCard
-                    key={p.id} project={p} isOverdue={false}
-                    onStatusTap={() => {}}
-                    onAdvanceStatus={() => {}} onRequestClear={() => {}}
-                    onDeleteRequest={() => setDeleteTargetId(p.id)}
-                    onArchive={() => {}}
+              /* ── Cleared tab ── */
+              <div style={{ opacity: 0.75 }}>
+                {clearedProjects.length === 0 ? (
+                  <EmptyState
+                    title={searchQuery ? 'No results' : 'Nothing cleared yet'}
+                    subtitle={searchQuery ? 'Try a different search' : 'Mark a project as cleared once payment arrives.'}
                   />
-                ))}
+                ) : (
+                  <div role="list" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {clearedProjects.map(p => (
+                      <ProjectCard
+                        key={p.id} project={p} isOverdue={false}
+                        isReadOnly
+                        onStatusTap={() => {}}
+                        onAdvanceStatus={() => {}} onRequestClear={() => {}}
+                        onDeleteRequest={() => {}}
+                        onArchive={() => {}}
+                        fromTab="cleared"
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
-          </div>
-
-        </motion.div>
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       {/* ── FAB ─────────────────────────────────────────── */}
@@ -311,8 +374,8 @@ export default function ProjectList() {
           left: '50%', transform: 'translateX(-50%)',
           background: C.black, color: C.white,
           border: `1.5px solid ${C.black}`,
-          borderRadius: R.xl, height: 48, padding: '0 32px',
-          cursor: 'pointer', fontSize: '14px', fontWeight: 700,
+          borderRadius: '8px', height: 48, padding: '0 32px',
+          cursor: 'pointer', fontSize: T.input.fontSize, fontWeight: 700,
           letterSpacing: '-0.01em',
           boxShadow: '0 4px 20px rgba(10,10,10,0.18)',
           zIndex: 20, whiteSpace: 'nowrap',
@@ -324,7 +387,12 @@ export default function ProjectList() {
       </button>
 
       {/* ── Avatar bottom sheet ──────────────────────────── */}
-      <AvatarSheet open={avatarOpen} onClose={() => setAvatarOpen(false)} />
+      <AvatarSheet
+        open={avatarOpen}
+        onClose={() => { setAvatarOpen(false); setAvatarInitialView('menu'); setAvatarInstant(false); }}
+        initialView={avatarInitialView}
+        instant={avatarInstant}
+      />
 
       {/* ── Status picker modal ──────────────────────────── */}
       {selectedProject && (
@@ -355,52 +423,79 @@ export default function ProjectList() {
       />
 
       {/* ── Archive confirmation modal ───────────────────── */}
-      <ConfirmModal
+      <ArchiveModal
         open={!!archiveTargetId && !!archiveTarget}
         onClose={() => setArchiveTargetId(null)}
-        icon={<Archive size={22} color="#475569" strokeWidth={2} />}
-        iconBg="#f1f5f9"
-        title="Archive this project?"
-        description={
-          <>
-            <strong style={{ color: C.black }}>{archiveTarget?.clientName}</strong>
-            {' — '}{archiveTarget?.type} will be moved to your archive.
-          </>
-        }
-        confirmLabel="Archive"
-        confirmBg="#475569"
-        confirmIcon={<Archive size={15} />}
+        clientName={archiveTarget?.clientName ?? ''}
         onConfirm={() => archiveTargetId && handleArchive(archiveTargetId)}
       />
 
       {/* ── Delete confirmation modal ────────────────────── */}
-      <ConfirmModal
+      <DeleteModal
         open={!!deleteTargetId && !!deleteTarget}
         onClose={() => setDeleteTargetId(null)}
-        icon={<Trash2 size={22} color={C.danger} strokeWidth={2} />}
-        iconBg={C.dangerLight}
-        title="Delete project?"
-        description={
-          <>
-            <strong style={{ color: C.black }}>{deleteTarget?.clientName}</strong>
-            {' — '}{deleteTarget?.type} will be permanently removed. This can't be undone.
-          </>
-        }
-        confirmLabel="Delete"
-        confirmBg={C.danger}
-        confirmIcon={<Trash2 size={15} />}
-        onConfirm={handleDelete}
+        clientName={deleteTarget?.clientName ?? ''}
+        body="This project and all its documents will be permanently deleted. This cannot be undone."
+        onDelete={handleDelete}
+        onArchiveInstead={() => {
+          if (deleteTargetId) handleArchive(deleteTargetId);
+          setDeleteTargetId(null);
+        }}
       />
 
     </div>
   );
 }
 
+/* ── Archive confirmation modal ─────────────────────────────── */
+function ArchiveModal({
+  open, onClose, clientName, onConfirm,
+}: {
+  open: boolean; onClose: () => void; clientName: string; onConfirm: () => void;
+}) {
+  const displayName = clientName.length > 24 ? clientName.slice(0, 24) + '…' : clientName;
+
+  return (
+    <Modal open={open} onClose={onClose} contentPadding="4px 20px 20px">
+      {/* Icon circle */}
+      <div style={{
+        width: 52, height: 52, borderRadius: '50%', background: C.surface,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        margin: '0 auto 16px',
+      }}>
+        <Archive size={22} color="#4B5563" strokeWidth={2} />
+      </div>
+
+      {/* Title */}
+      <p style={{ fontSize: T.title.fontSize, fontWeight: 600, color: C.black, margin: '0 0 8px', lineHeight: 1.3 }}>
+        Archive {displayName}?
+      </p>
+
+      {/* Body */}
+      <p style={{ fontSize: '13px', fontWeight: 400, color: C.muted, margin: '0 0 24px', lineHeight: 1.6 }}>
+        Hidden from your active list. Restore it anytime from your profile.
+      </p>
+
+      {/* Archive button */}
+      <Btn variant="primary" fullWidth onClick={() => { onConfirm(); onClose(); }}>
+        Archive
+      </Btn>
+
+      {/* Cancel */}
+      <div style={{ marginTop: 4 }}>
+        <Btn variant="ghost" fullWidth onClick={onClose}>
+          Cancel
+        </Btn>
+      </div>
+    </Modal>
+  );
+}
+
 /* ── Empty state ────────────────────────────────────────── */
 function EmptyState({
-  title, subtitle, action,
+  title, subtitle, action, showGuideCards,
 }: {
-  title: string; subtitle: string; action?: React.ReactNode;
+  title: string; subtitle: string; action?: React.ReactNode; showGuideCards?: boolean;
 }) {
   return (
     <div style={{
@@ -421,6 +516,25 @@ function EmptyState({
       <p style={{ ...T.base, fontWeight: 500, color: C.muted, margin: 0 }}>{title}</p>
       <p style={{ ...T.sm, color: C.hint, margin: 0 }}>{subtitle}</p>
       {action}
+      {showGuideCards && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 24, width: '100%' }}>
+          {['1. Add a project', '2. Send a quote', '3. Get paid'].map(label => (
+            <div key={label} style={{
+              flex: 1,
+              background: '#F5F6F8',
+              border: '1px solid #E2E5EC',
+              borderRadius: '8px',
+              padding: '10px 10px',
+              textAlign: 'center',
+            }}>
+              <span style={{
+                fontSize: T.label.fontSize, fontWeight: 600, color: C.muted,
+                display: 'block', lineHeight: 1.4,
+              }}>{label}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -428,6 +542,6 @@ function EmptyState({
 const emptyActionStyle: React.CSSProperties = {
   background: C.black, color: C.white, border: `1.5px solid ${C.black}`,
   borderRadius: R.xl, height: 48, padding: '0 24px',
-  cursor: 'pointer', marginTop: 8, fontSize: '14px', fontWeight: 700,
-  letterSpacing: '-0.01em',
+  cursor: 'pointer', marginTop: 8, fontSize: T.input.fontSize, fontWeight: 700,
+  letterSpacing: '-0.01em', transition: 'background 150ms',
 };

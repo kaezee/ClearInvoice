@@ -1,27 +1,27 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ChevronLeft, Trash2 } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
+import { DarkNavBtn } from '../components/ui/CircleIconBtn';
 import { motion, AnimatePresence } from 'motion/react';
+import { toast } from 'sonner';
 import { useApp } from '../store';
-import { C, T, R } from '../tokens';
+import { C, T } from '../tokens';
 import { ProjectCard } from '../components/ProjectCard';
-import { BottomSheet } from '../components/BottomSheet';
-import { ConfirmModal } from '../components/ConfirmModal';
+import { DeleteModal } from '../components/DeleteModal';
 
 export default function Archived() {
   const navigate = useNavigate();
-  const { projects, updateProject, deleteProject } = useApp();
+  const { projects, deleteProject, restoreProject } = useApp();
 
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
-  const [bottomSheetId, setBottomSheetId]   = useState<string | null>(null);
 
   const archivedProjects = projects.filter(p => p.status === 'archived');
   const deleteTarget     = projects.find(p => p.id === deleteTargetId);
-  const selectedProject  = projects.find(p => p.id === bottomSheetId);
 
+  // One-tap restore: returns the project to its pre-archive status (no picker).
   const handleRestore = (id: string) => {
-    // Quick-restore via swipe button → open status picker so user chooses destination
-    setBottomSheetId(id);
+    restoreProject(id);
+    toast.success('Restored');
   };
 
   const handleDelete = () => {
@@ -44,20 +44,12 @@ export default function Archived() {
         display: 'flex', alignItems: 'center', gap: 4,
         flexShrink: 0,
       }}>
-        <button
-          onClick={() => navigate(-1)}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: C.white, display: 'flex', alignItems: 'center',
-            padding: '4px 8px 4px 0', minHeight: 44, marginLeft: -4,
-          }}
-          aria-label="Back"
-        >
-          <ChevronLeft size={22} strokeWidth={2.5} />
-        </button>
+        <DarkNavBtn onClick={() => navigate(-1)} ariaLabel="Back">
+          <ChevronLeft size={20} strokeWidth={2.5} />
+        </DarkNavBtn>
 
         <span style={{
-          flex: 1, fontSize: '17px', fontWeight: 600,
+          flex: 1, fontSize: T.title.fontSize, fontWeight: 600,
           color: C.white, letterSpacing: '-0.01em',
         }}>
           Archived
@@ -97,7 +89,7 @@ export default function Archived() {
                   <ProjectCard
                     project={p}
                     isOverdue={false}
-                    onStatusTap={() => setBottomSheetId(p.id)}
+                    onStatusTap={() => {}}
                     onAdvanceStatus={() => {}}
                     onRequestClear={() => {}}
                     onDeleteRequest={() => setDeleteTargetId(p.id)}
@@ -111,37 +103,13 @@ export default function Archived() {
         )}
       </div>
 
-      {/* ── Status / restore bottom sheet ────────────────── */}
-      {selectedProject && (
-        <BottomSheet
-          open={!!bottomSheetId}
-          onClose={() => setBottomSheetId(null)}
-          title={selectedProject.clientName}
-          currentStatus={selectedProject.status}
-          onSelectStatus={(status) => {
-            updateProject(selectedProject.id, { status });
-            setBottomSheetId(null);
-          }}
-        />
-      )}
-
       {/* ── Delete confirmation modal ─────────────────── */}
-      <ConfirmModal
+      <DeleteModal
         open={!!deleteTargetId && !!deleteTarget}
         onClose={() => setDeleteTargetId(null)}
-        icon={<Trash2 size={22} color={C.danger} strokeWidth={2} />}
-        iconBg={C.dangerLight}
-        title="Delete project?"
-        description={
-          <>
-            <strong style={{ color: C.black }}>{deleteTarget?.clientName}</strong>
-            {' — '}{deleteTarget?.type} will be permanently removed. This can't be undone.
-          </>
-        }
-        confirmLabel="Delete"
-        confirmBg={C.danger}
-        confirmIcon={<Trash2 size={15} />}
-        onConfirm={handleDelete}
+        clientName={deleteTarget?.clientName ?? ''}
+        body="There's no way to get it back."
+        onDelete={handleDelete}
       />
 
     </div>

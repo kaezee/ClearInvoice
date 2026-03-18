@@ -1,6 +1,8 @@
 import { createBrowserRouter } from 'react-router';
 import Root from './Root';
 import Landing from './screens/Landing';
+import Onboarding from './screens/Onboarding';
+import Help from './screens/Help';
 import ProjectList from './screens/ProjectList';
 import ProjectDetail from './screens/ProjectDetail';
 import NewProject from './screens/NewProject';
@@ -16,6 +18,11 @@ export const router = createBrowserRouter([
     Component: Root,
     children: [
       { index: true, Component: Landing },
+      // ── Onboarding flow ───────────────────────────────────
+      { path: 'onboarding/:step', Component: Onboarding },
+      // ── Help ─────────────────────────────────────────────
+      { path: 'help', Component: Help },
+      // ── Main app ─────────────────────────────────────────
       { path: 'projects', Component: ProjectList },
       { path: 'projects/new', Component: NewProject },
       { path: 'projects/:id', Component: ProjectDetail },

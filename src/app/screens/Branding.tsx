@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ChevronLeft, Upload } from 'lucide-react';
+import { DarkNavBtn } from '../components/ui/CircleIconBtn';
 import { useApp } from '../store';
 import { C, T, R } from '../tokens';
 import { BrandingSettings, InvoiceStyle } from '../types';
@@ -100,18 +101,11 @@ export default function Branding() {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         position: 'sticky', top: 0, zIndex: 10, flexShrink: 0, minHeight: 52,
       }}>
-        <button
-          onClick={() => navigate(-1)}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: C.white, minWidth: 44, minHeight: 44,
-            display: 'flex', alignItems: 'center', padding: 0,
-          }}
-          aria-label="Go back"
-        >
-          <ChevronLeft size={24} />
-        </button>
-        <span style={{ fontSize: '17px', fontWeight: 600, color: C.white, letterSpacing: '-0.01em' }}>Branding</span>
+        {/* ‹ Dark context back — 20px icon, 44×44 circle */}
+        <DarkNavBtn onClick={() => navigate(-1)} ariaLabel="Go back">
+          <ChevronLeft size={20} strokeWidth={2.5} />
+        </DarkNavBtn>
+        <span style={{ fontSize: T.title.fontSize, fontWeight: 600, color: C.white, letterSpacing: '-0.01em' }}>Branding</span>
         <div style={{ width: 44 }} />
       </nav>
 
@@ -260,7 +254,7 @@ export default function Branding() {
             color: saved ? C.black : C.white,
             border: `1.5px solid ${C.black}`,
             borderRadius: R.xl,
-            cursor: 'pointer', fontSize: '14px', fontWeight: 700,
+            cursor: 'pointer', fontSize: T.input.fontSize, fontWeight: 700,
             letterSpacing: '-0.01em',
             transition: 'background 200ms, color 200ms',
           }}

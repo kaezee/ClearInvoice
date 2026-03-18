@@ -37,7 +37,8 @@ export default function ClientQuotePage() {
   }
 
   const total = project.invoiceItems.reduce((s, i) => s + i.amount, 0);
-  const quoteRef = project.invoiceNumber.replace('INV-', 'QUO-');
+  const version = project.quoteVersion ?? 1;
+  const quoteRef = `QUO-${String(version).padStart(3, '0')}`;
   const today = new Date().toISOString().split('T')[0];
   const isExpired = !!(project.expiryDate && project.expiryDate < today);
 
@@ -179,7 +180,7 @@ export default function ClientQuotePage() {
           <div style={{ marginTop: 16 }}>
             <div style={SECTION_LABEL}>To proceed</div>
             <div style={{ fontSize: 13, color: '#0A0A0A', lineHeight: 1.6, marginTop: 6 }}>
-              {project.invoiceNotes || 'Reply to confirm and work begins immediately.'}
+              {project.quoteNotes ?? project.invoiceNotes ?? 'Reply to confirm and work begins immediately.'}
             </div>
           </div>
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { ProjectStatus } from '../types';
-import { C, STATUS_FILL } from '../tokens';
+import { C, STATUS_FILL, T } from '../tokens';
 
 export const STATUS_CONFIG: Record<ProjectStatus, { label: string; bg: string }> = {
   'ready':       { label: 'Quoting',     bg: STATUS_FILL['ready']       },
@@ -26,7 +26,7 @@ const pillStyle = (bg: string): React.CSSProperties => ({
   borderRadius:   '8px',
   padding:        '0 12px',
   height:         '27px',
-  fontSize:       '12px',
+  fontSize:       T.pill.fontSize,
   fontWeight:     700,
   letterSpacing:  '0',
   whiteSpace:     'nowrap',

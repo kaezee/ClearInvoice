@@ -2,20 +2,24 @@ import React from 'react';
 import { X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { C, R } from '../tokens';
+import { LightModalBtn } from './ui/CircleIconBtn';
 
 interface ModalProps {
   open: boolean;
   onClose: () => void;
   children: React.ReactNode;
-  /** Padding for the content area below the close-button row. Default: '4px 24px 24px' */
+  /** Padding for the content area below the header row. Default: '4px 24px 24px' */
   contentPadding?: string;
   maxWidth?: number;
+  /** Replace the default close-button row with a custom header element */
+  customHeader?: React.ReactNode;
 }
 
 export function Modal({
   open, onClose, children,
   contentPadding = '4px 24px 24px',
   maxWidth = 360,
+  customHeader,
 }: ModalProps) {
   return (
     <AnimatePresence>
@@ -50,31 +54,20 @@ export function Modal({
               boxShadow: '0 24px 64px rgba(0,0,0,0.22)',
               maxHeight: 'calc(100dvh - 80px)',
               overflowY: 'auto',
-              /* No outer padding — header row + content area handle spacing */
             }}
           >
-            {/* ── Close button row ───────────────────── */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              padding: '10px 10px 0',
-            }}>
-              <button
-                onClick={onClose}
-                aria-label="Close"
-                style={{
-                  width: 28, height: 28,
-                  background: C.surface,
-                  border: 'none',
-                  borderRadius: '50%',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                }}
-              >
-                <X size={13} color={C.muted} strokeWidth={2.5} />
-              </button>
-            </div>
+            {customHeader ?? (
+              /* ── Default close button row ───────────────────── */
+              <div style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                padding: '4px 4px 0',
+              }}>
+                <LightModalBtn onClick={onClose} ariaLabel="Close">
+                  <X size={16} strokeWidth={2.5} />
+                </LightModalBtn>
+              </div>
+            )}
 
             {/* ── Content ────────────────────────────── */}
             <div style={{ padding: contentPadding }}>

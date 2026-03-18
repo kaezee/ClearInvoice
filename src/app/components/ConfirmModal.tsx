@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal } from './Modal';
 import { Btn } from './ui/Btn';
-import { C, R } from '../tokens';
+import { C } from '../tokens';
 
 interface ConfirmModalProps {
   open: boolean;
@@ -38,10 +38,11 @@ export function ConfirmModal({
     <Modal open={open} onClose={onClose} contentPadding="4px 24px 24px">
       {/* Icon circle */}
       <div style={{
-        width: 48, height: 48, borderRadius: '50%',
+        width: 52, height: 52, borderRadius: '50%',
         background: iconBg,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         marginBottom: 14,
+        margin: '0 auto 14px',
       }}>
         {icon}
       </div>
@@ -56,18 +57,20 @@ export function ConfirmModal({
         {description}
       </p>
 
-      {/* Buttons */}
-      <div style={{ display: 'flex', gap: 10 }}>
-        <Btn variant="secondary" style={{ flex: 1 }} onClick={onClose}>
+      {/* Confirm button — full width */}
+      <Btn
+        variant={confirmVariant}
+        fullWidth
+        onClick={() => { onConfirm(); onClose(); }}
+      >
+        {confirmIcon}
+        {confirmLabel}
+      </Btn>
+
+      {/* Cancel — full width secondary button below */}
+      <div style={{ marginTop: 10 }}>
+        <Btn variant="secondary" fullWidth onClick={onClose}>
           {cancelLabel}
-        </Btn>
-        <Btn
-          variant={confirmVariant}
-          style={{ flex: 1 }}
-          onClick={() => { onConfirm(); onClose(); }}
-        >
-          {confirmIcon}
-          {confirmLabel}
         </Btn>
       </div>
     </Modal>

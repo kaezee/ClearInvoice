@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../store';
 import { C, T, R } from '../tokens';
 import { InvoiceDefaultsType, RateCardItem, CustomField, PaymentTerms } from '../types';
+import { NumberInput } from '../components/ui/NumberInput';
+import { DarkNavBtn, LightModalBtn } from '../components/ui/CircleIconBtn';
 
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'INR', 'AUD', 'CAD'];
 const TERMS: { key: PaymentTerms; label: string }[] = [
@@ -99,19 +101,11 @@ function AddSheet({ open, onClose, onAdd, title, fields }: AddFieldSheetProps) {
               {/* Drag pill */}
               <div style={{ width: 32, height: 3, background: C.border, borderRadius: R.pill, margin: '0 auto 20px' }} />
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-                <p style={{ fontSize: '17px', fontWeight: 700, color: C.black, margin: 0, letterSpacing: '-0.02em' }}>{title}</p>
-                <button
-                  onClick={onClose}
-                  style={{
-                    width: 32, height: 32, borderRadius: '50%',
-                    background: C.surface, border: `1px solid ${C.border}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: 'pointer', flexShrink: 0,
-                  }}
-                  aria-label="Close"
-                >
-                  <X size={15} color={C.black} />
-                </button>
+                <p style={{ fontSize: T.title.fontSize, fontWeight: 700, color: C.black, margin: 0, letterSpacing: '-0.02em' }}>{title}</p>
+                {/* × Light context close — 16px icon, 36×36 circle, 44×44 tap target */}
+                <LightModalBtn onClick={onClose} ariaLabel="Close" style={{ marginRight: -4 }}>
+                  <X size={16} strokeWidth={2.5} />
+                </LightModalBtn>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {fields.map(field => (
@@ -119,22 +113,31 @@ function AddSheet({ open, onClose, onAdd, title, fields }: AddFieldSheetProps) {
                     <label style={{ fontSize: '13px', fontWeight: 600, color: C.black, display: 'block', marginBottom: 8 }}>
                       {field.label}
                     </label>
-                    <input
-                      placeholder={field.placeholder}
-                      value={values[field.key] || ''}
-                      onChange={e => setValues(prev => ({ ...prev, [field.key]: e.target.value }))}
-                      type={field.key === 'price' ? 'number' : 'text'}
-                      style={{
-                        width: '100%', height: 52, background: C.surface,
-                        border: `1px solid ${C.border}`, borderRadius: R.md,
-                        padding: '0 14px', fontSize: '15px', outline: 'none',
-                        fontFamily: 'inherit', boxSizing: 'border-box',
-                        color: C.black,
-                        transition: 'border-color 150ms',
-                      }}
-                      onFocus={e  => e.currentTarget.style.borderColor = C.black}
-                      onBlur={e   => e.currentTarget.style.borderColor = C.border}
-                    />
+                    {field.key === 'price' ? (
+                      <NumberInput
+                        placeholder={field.placeholder}
+                        value={values[field.key] || ''}
+                        onChange={val => setValues(prev => ({ ...prev, [field.key]: val }))}
+                        style={{ height: 52 }}
+                      />
+                    ) : (
+                      <input
+                        placeholder={field.placeholder}
+                        value={values[field.key] || ''}
+                        onChange={e => setValues(prev => ({ ...prev, [field.key]: e.target.value }))}
+                        type="text"
+                        style={{
+                          width: '100%', height: 52, background: C.surface,
+                          border: `1px solid ${C.border}`, borderRadius: R.md,
+                          padding: '0 14px', fontSize: '15px', outline: 'none',
+                          fontFamily: 'inherit', boxSizing: 'border-box',
+                          color: C.black,
+                          transition: 'border-color 150ms',
+                        }}
+                        onFocus={e  => e.currentTarget.style.borderColor = C.black}
+                        onBlur={e   => e.currentTarget.style.borderColor = C.border}
+                      />
+                    )}
                   </div>
                 ))}
               </div>
@@ -158,10 +161,42 @@ function AddSheet({ open, onClose, onAdd, title, fields }: AddFieldSheetProps) {
   );
 }
 
+/* ── Simple toggle switch ──────────────────────────────── */
+function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      onClick={() => onChange(!checked)}
+      style={{
+        width: 44, height: 24, borderRadius: 12,
+        background: checked ? C.black : C.border,
+        border: 'none', cursor: 'pointer', padding: 0,
+        position: 'relative', flexShrink: 0,
+        transition: 'background 200ms',
+      }}
+      aria-checked={checked}
+      role="switch"
+    >
+      <div style={{
+        width: 18, height: 18, borderRadius: 9, background: C.white,
+        position: 'absolute', top: 3,
+        left: checked ? 23 : 3,
+        transition: 'left 200ms',
+      }} />
+    </button>
+  );
+}
+
 export default function InvoiceDefaults() {
   const { invoiceDefaults, updateInvoiceDefaults, branding, updateBranding } = useApp();
   const navigate = useNavigate();
-  const [defaults, setDefaults]       = useState<InvoiceDefaultsType>({ ...invoiceDefaults });
+  const [defaults, setDefaults]       = useState<InvoiceDefaultsType>(() => ({
+    ...invoiceDefaults,
+    fullName:     invoiceDefaults.fullName || branding.freelancerName || '',
+    businessName: invoiceDefaults.businessName || branding.businessName || '',
+    taxEnabled:   invoiceDefaults.taxEnabled ?? false,
+    taxLabel:     invoiceDefaults.taxLabel ?? '',
+    taxRate:      invoiceDefaults.taxRate ?? 20,
+  }));
   const [showAddField, setShowAddField]   = useState(false);
   const [showAddService, setShowAddService] = useState(false);
   const [shakingId, setShakingId]     = useState<string | null>(null);
@@ -213,6 +248,8 @@ export default function InvoiceDefaults() {
 
   const handleSave = () => {
     updateInvoiceDefaults(defaults);
+    // keep branding name/businessName in sync
+    updateBranding({ ...branding, freelancerName: defaults.fullName, businessName: defaults.businessName });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -241,23 +278,205 @@ export default function InvoiceDefaults() {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         position: 'sticky', top: 0, zIndex: 10, flexShrink: 0, minHeight: 52,
       }}>
-        <button
+        <DarkNavBtn
           onClick={() => navigate('/projects', { state: { openProfile: true } })}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: C.white, minWidth: 44, minHeight: 44,
-            display: 'flex', alignItems: 'center', padding: 0,
-          }}
-          aria-label="Go back"
+          ariaLabel="Go back"
         >
-          <ChevronLeft size={24} />
-        </button>
-        <span style={{ fontSize: '17px', fontWeight: 600, color: C.white, letterSpacing: '-0.01em' }}>Invoice defaults</span>
+          <ChevronLeft size={20} strokeWidth={2.5} />
+        </DarkNavBtn>
+        <span style={{ fontSize: T.title.fontSize, fontWeight: 600, color: C.white, letterSpacing: '-0.01em' }}>Invoice defaults</span>
         <div style={{ minWidth: 44 }} />
       </nav>
 
       <main style={{ flex: 1, padding: '12px 16px 32px', overflowY: 'auto' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+          {/* ── Your business ────────────────────────── */}
+          <SectionCard title="YOUR BUSINESS">
+            <p style={{ fontSize: '13px', color: C.muted, margin: '0 0 16px', lineHeight: 1.5 }}>
+              This information appears on every invoice and quote you send.
+            </p>
+
+            {/* Name + Business name row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+              <div>
+                <label style={{ fontSize: '10px', fontWeight: 700, color: C.muted, display: 'block', marginBottom: 5, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  Your name
+                </label>
+                <input
+                  value={defaults.fullName}
+                  onChange={e => update({ fullName: e.target.value })}
+                  placeholder="Kiran Das"
+                  style={inputBase}
+                  onFocus={e => (e.currentTarget.style.borderColor = C.black)}
+                  onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '10px', fontWeight: 700, color: C.muted, display: 'block', marginBottom: 5, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  Business name
+                </label>
+                <input
+                  value={defaults.businessName}
+                  onChange={e => update({ businessName: e.target.value })}
+                  placeholder="KD Studio"
+                  style={inputBase}
+                  onFocus={e => (e.currentTarget.style.borderColor = C.black)}
+                  onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+                />
+              </div>
+            </div>
+
+            {/* Email */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: '10px', fontWeight: 700, color: C.muted, display: 'block', marginBottom: 5, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                Email
+              </label>
+              <input
+                value={defaults.businessEmail}
+                onChange={e => update({ businessEmail: e.target.value })}
+                placeholder="kiran@kdstudio.co"
+                type="email"
+                style={inputBase}
+                onFocus={e => (e.currentTarget.style.borderColor = C.black)}
+                onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+              />
+            </div>
+
+            {/* Address line 1 */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: '10px', fontWeight: 700, color: C.muted, display: 'block', marginBottom: 5, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                Address line 1
+              </label>
+              <input
+                value={defaults.addressLine1}
+                onChange={e => update({ addressLine1: e.target.value })}
+                placeholder="14 Clerkenwell Road"
+                style={inputBase}
+                onFocus={e => (e.currentTarget.style.borderColor = C.black)}
+                onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+              />
+            </div>
+
+            {/* Address line 2 */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: '10px', fontWeight: 700, color: C.muted, display: 'block', marginBottom: 5, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                Address line 2 <span style={{ fontWeight: 400, opacity: 0.55 }}>optional</span>
+              </label>
+              <input
+                value={defaults.addressLine2}
+                onChange={e => update({ addressLine2: e.target.value })}
+                placeholder="Floor, suite, unit..."
+                style={inputBase}
+                onFocus={e => (e.currentTarget.style.borderColor = C.black)}
+                onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+              />
+            </div>
+
+            {/* City + Postcode row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+              <div>
+                <label style={{ fontSize: '10px', fontWeight: 700, color: C.muted, display: 'block', marginBottom: 5, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  City
+                </label>
+                <input
+                  value={defaults.city}
+                  onChange={e => update({ city: e.target.value })}
+                  placeholder="London"
+                  style={inputBase}
+                  onFocus={e => (e.currentTarget.style.borderColor = C.black)}
+                  onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '10px', fontWeight: 700, color: C.muted, display: 'block', marginBottom: 5, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  Postcode
+                </label>
+                <input
+                  value={defaults.postcode}
+                  onChange={e => update({ postcode: e.target.value })}
+                  placeholder="EC1M 5RF"
+                  style={inputBase}
+                  onFocus={e => (e.currentTarget.style.borderColor = C.black)}
+                  onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+                />
+              </div>
+            </div>
+
+            {/* Phone + VAT row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <label style={{ fontSize: '10px', fontWeight: 700, color: C.muted, display: 'block', marginBottom: 5, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  Phone <span style={{ fontWeight: 400, opacity: 0.55 }}>optional</span>
+                </label>
+                <input
+                  value={defaults.phone}
+                  onChange={e => update({ phone: e.target.value })}
+                  placeholder="+44 7700 900000"
+                  type="tel"
+                  style={inputBase}
+                  onFocus={e => (e.currentTarget.style.borderColor = C.black)}
+                  onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '10px', fontWeight: 700, color: C.muted, display: 'block', marginBottom: 5, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  VAT / Reg no <span style={{ fontWeight: 400, opacity: 0.55 }}>optional</span>
+                </label>
+                <input
+                  value={defaults.regNumber}
+                  onChange={e => update({ regNumber: e.target.value })}
+                  placeholder="GB123456789"
+                  style={inputBase}
+                  onFocus={e => (e.currentTarget.style.borderColor = C.black)}
+                  onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+                />
+              </div>
+            </div>
+          </SectionCard>
+
+          {/* ── Numbering ────────────────────────────── */}
+          <SectionCard title="NUMBERING">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+              <div>
+                <label style={{ fontSize: '10px', fontWeight: 700, color: C.muted, display: 'block', marginBottom: 5, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  Invoice prefix
+                </label>
+                <input
+                  value={defaults.invoicePrefix}
+                  onChange={e => update({ invoicePrefix: e.target.value })}
+                  placeholder="INV"
+                  style={inputBase}
+                  onFocus={e => (e.currentTarget.style.borderColor = C.black)}
+                  onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '10px', fontWeight: 700, color: C.muted, display: 'block', marginBottom: 5, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  Quote prefix
+                </label>
+                <input
+                  value={defaults.quotePrefix}
+                  onChange={e => update({ quotePrefix: e.target.value })}
+                  placeholder="QUO"
+                  style={inputBase}
+                  onFocus={e => (e.currentTarget.style.borderColor = C.black)}
+                  onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+                />
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: '10px', fontWeight: 700, color: C.muted, display: 'block', marginBottom: 5, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                Starting number
+              </label>
+              <NumberInput
+                min={1}
+                value={defaults.startingNumber ?? 1}
+                onChange={val => update({ startingNumber: Math.max(1, Number(val)) })}
+                style={{ height: 44 }}
+              />
+            </div>
+          </SectionCard>
 
           {/* ── Logo upload ─────────────────────────── */}
           <SectionCard title="Business logo">
@@ -287,7 +506,7 @@ export default function InvoiceDefaults() {
                         height: 32, padding: '0 12px',
                         background: C.surface, border: `1px solid ${C.border}`,
                         borderRadius: R.md, cursor: 'pointer',
-                        fontSize: '12px', fontWeight: 600, color: C.black,
+                        fontSize: T.pill.fontSize, fontWeight: 600, color: C.black,
                         display: 'flex', alignItems: 'center', gap: 5,
                       }}
                     >
@@ -299,7 +518,7 @@ export default function InvoiceDefaults() {
                         height: 32, padding: '0 12px',
                         background: C.dangerLight, border: `1px solid rgba(220,38,38,0.2)`,
                         borderRadius: R.md, cursor: 'pointer',
-                        fontSize: '12px', fontWeight: 600, color: C.danger,
+                        fontSize: T.pill.fontSize, fontWeight: 600, color: C.danger,
                         display: 'flex', alignItems: 'center', gap: 5,
                       }}
                     >
@@ -373,8 +592,8 @@ export default function InvoiceDefaults() {
             <AddRowButton label="Add custom field" onClick={() => setShowAddField(true)} />
           </SectionCard>
 
-          {/* ── Rate card ────────────────────────────── */}
-          <SectionCard title="Rate card">
+          {/* ── Services ────────────────────────────── */}
+          <SectionCard title="Services">
             {defaults.rateCard.map((item, idx) => (
               <motion.div
                 key={item.id}
@@ -480,6 +699,62 @@ export default function InvoiceDefaults() {
             </div>
           </SectionCard>
 
+          {/* ── Tax ──────────────────────────────────── */}
+          <SectionCard title="TAX">
+            {/* Toggle row */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: defaults.taxEnabled ? 16 : 0 }}>
+              <label style={{ fontSize: '13px', fontWeight: 500, color: C.black }}>Add tax to invoices</label>
+              <ToggleSwitch checked={!!defaults.taxEnabled} onChange={(v) => update({ taxEnabled: v })} />
+            </div>
+
+            {defaults.taxEnabled && (
+              <>
+                {/* Tax name + rate side-by-side */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 10, marginBottom: 10 }}>
+                  <div>
+                    <label style={{ fontSize: '10px', fontWeight: 700, color: C.muted, display: 'block', marginBottom: 5, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                      Tax name
+                    </label>
+                    <input
+                      value={defaults.taxLabel ?? ''}
+                      onChange={e => update({ taxLabel: e.target.value })}
+                      placeholder="e.g. VAT, GST, Tax"
+                      style={inputBase}
+                      onFocus={e => (e.currentTarget.style.borderColor = C.black)}
+                      onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '10px', fontWeight: 700, color: C.muted, display: 'block', marginBottom: 5, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                      Rate
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={defaults.taxRate ?? 20}
+                        onChange={e => update({ taxRate: Number(e.target.value) })}
+                        placeholder="0"
+                        style={{ ...inputBase, paddingRight: 28 }}
+                        onFocus={e => (e.currentTarget.style.borderColor = C.black)}
+                        onBlur={e  => (e.currentTarget.style.borderColor = C.border)}
+                      />
+                      <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: '13px', color: C.muted, pointerEvents: 'none' }}>%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Helper: "Shown on invoice as: VAT 20%" */}
+                {defaults.taxLabel && (
+                  <p style={{ fontSize: '11px', color: C.muted, margin: '0 0 10px', lineHeight: 1.5 }}>
+                    Shown on invoice as: <strong style={{ color: C.black }}>{defaults.taxLabel} {defaults.taxRate ?? 0}%</strong>
+                  </p>
+                )}
+              </>
+            )}
+          </SectionCard>
+
         </div>
 
         {/* Save */}
@@ -491,7 +766,7 @@ export default function InvoiceDefaults() {
             color: saved ? C.black : C.white,
             border: `1.5px solid ${C.black}`,
             borderRadius: R.xl,
-            cursor: 'pointer', fontSize: '14px', fontWeight: 700,
+            cursor: 'pointer', fontSize: T.input.fontSize, fontWeight: 700,
             letterSpacing: '-0.01em',
             transition: 'background 200ms, color 200ms',
           }}

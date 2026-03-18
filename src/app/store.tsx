@@ -249,20 +249,20 @@ const SAMPLE_PROJECTS: Project[] = [
 const DEFAULT_BRANDING: BrandingSettings = {
   brandColor: '#7C3AED',
   invoiceStyle: 'classic',
-  businessName: 'KD Studio',
-  freelancerName: 'Kiran Das',
+  businessName: 'JD Studio',
+  freelancerName: 'John Doe',
 };
 
 const DEFAULT_INVOICE_DEFAULTS: InvoiceDefaultsType = {
   // Your business
-  fullName:      'Kiran Das',
-  businessName:  'KD Studio',
+  fullName:      'John Doe',
+  businessName:  'JD Studio',
   addressLine1:  '14 Clerkenwell Road',
   addressLine2:  '',
   city:          'London',
   postcode:      'EC1M 5RF',
   address:       '14 Clerkenwell Road\nLondon EC1M 5RF',
-  businessEmail: 'kiran@kdstudio.co',
+  businessEmail: 'john@jdstudio.co',
   phone:         '',
   regNumber:     '',
 
@@ -292,6 +292,11 @@ const DEFAULT_INVOICE_DEFAULTS: InvoiceDefaultsType = {
   defaultTerms:    'net30',
   defaultCurrency: 'GBP',
   paymentNotes:    'Please pay via BACS bank transfer. Account details: Sort code 01-23-45, Account 12345678.',
+
+  // Tax defaults
+  taxEnabled: false,
+  taxLabel:   'VAT',
+  taxRate:    20,
 };
 
 function load<T>(key: string, fallback: T): T {
@@ -328,12 +333,22 @@ interface AppContextType {
   updateProject: (id: string, updates: Partial<Project>) => void;
   deleteProject: (id: string) => void;
   advanceStatus: (id: string) => void;
+  /** Archives a project, saving its current status for one-tap restore */
+  archiveProject: (id: string) => void;
+  /** Restores a project to its pre-archive status (default: in-progress, never cleared) */
+  restoreProject: (id: string) => void;
   updateBranding: (s: BrandingSettings) => void;
   updateInvoiceDefaults: (d: InvoiceDefaultsType) => void;
   isOverdue: (p: Project) => boolean;
 }
 
-const AppContext = createContext<AppContextType | null>(null);
+// Stable singleton — survives HMR re-execution so provider and consumers
+// always share the same context reference.
+const _win = window as any;
+if (!_win.__CLEAR_APP_CTX__) {
+  _win.__CLEAR_APP_CTX__ = createContext<AppContextType | null>(null);
+}
+const AppContext: React.Context<AppContextType | null> = _win.__CLEAR_APP_CTX__;
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<Project[]>(() => load('clear_projects', SAMPLE_PROJECTS));
@@ -357,7 +372,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...data,
       id,
       invoiceNumber,
-      invoiceItems: [{ id: '1', description: data.type, amount: data.amount }],
+      invoiceItems: data.services?.length
+        ? data.services.map((s, i) => ({ id: String(i + 1), description: s.name, amount: s.price }))
+        : [{ id: '1', description: data.type, amount: data.amount }],
       createdAt: now.toISOString(),
     };
     setProjects(prev => {
@@ -397,6 +414,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const archiveProject = useCallback((id: string) => {
+    setProjects(prev => {
+      const updated = prev.map(p => {
+        if (p.id !== id) return p;
+        return { ...p, preArchiveStatus: p.status, status: 'archived' as ProjectStatus };
+      });
+      save('clear_projects', updated);
+      return updated;
+    });
+  }, []);
+
+  // Restores to pre-archive status; falls back to 'in-progress'. Never restores to 'cleared'.
+  const restoreProject = useCallback((id: string) => {
+    setProjects(prev => {
+      const updated = prev.map(p => {
+        if (p.id !== id) return p;
+        const target = p.preArchiveStatus && p.preArchiveStatus !== 'cleared' && p.preArchiveStatus !== 'archived'
+          ? p.preArchiveStatus
+          : 'in-progress' as ProjectStatus;
+        return { ...p, status: target, preArchiveStatus: undefined };
+      });
+      save('clear_projects', updated);
+      return updated;
+    });
+  }, []);
+
   const updateBranding = useCallback((s: BrandingSettings) => {
     setBranding(s);
     save('clear_branding', s);
@@ -417,6 +460,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AppContext.Provider value={{
       projects, branding, invoiceDefaults, hasLaunched, setHasLaunched,
       addProject, updateProject, deleteProject, advanceStatus,
+      archiveProject, restoreProject,
       updateBranding, updateInvoiceDefaults, isOverdue,
     }}>
       {children}

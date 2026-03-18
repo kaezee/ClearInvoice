@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { T } from '../../tokens';
 
 /* ─── Variant definitions ────────────────────────────────────
    Spec: everything darkens on hover, nothing inverts
@@ -8,6 +9,7 @@ import React, { useState } from 'react';
 type BtnVariant =
   | 'primary'
   | 'secondary'
+  | 'ghost'
   | 'destructive'
   | 'accent-cyan'
   | 'accent-yellow'
@@ -36,16 +38,22 @@ const VARIANTS: Record<BtnVariant, {
     disabled: { background: '#0A0A0A', color: '#FFFFFF', border: '1.5px solid #0A0A0A', opacity: 0.3, cursor: 'not-allowed' },
   },
   secondary: {
-    default:  { background: '#F0F0F0', color: '#0A0A0A', border: '1.5px solid #0A0A0A' },
-    hover:    { background: '#D4D4D4', color: '#0A0A0A', border: '1.5px solid #0A0A0A' },
-    active:   { background: '#BEBEBE', color: '#0A0A0A', border: '1.5px solid #0A0A0A', transform: 'scale(0.98)' },
-    disabled: { background: '#F0F0F0', color: '#0A0A0A', border: '1.5px solid #0A0A0A', opacity: 0.3, cursor: 'not-allowed' },
+    default:  { background: 'transparent', color: '#0A0A0A', border: '1.5px solid #0A0A0A' },
+    hover:    { background: '#F0F0F0',     color: '#0A0A0A', border: '1.5px solid #0A0A0A' },
+    active:   { background: '#D4D4D4',     color: '#0A0A0A', border: '1.5px solid #0A0A0A', transform: 'scale(0.98)' },
+    disabled: { background: 'transparent', color: '#0A0A0A', border: '1.5px solid #0A0A0A', opacity: 0.3, cursor: 'not-allowed' },
+  },
+  ghost: {
+    default:  { background: 'transparent', color: '#0A0A0A', border: '1.5px solid transparent' },
+    hover:    { background: '#F0F0F0',     color: '#0A0A0A', border: '1.5px solid transparent' },
+    active:   { background: '#D4D4D4',     color: '#0A0A0A', border: '1.5px solid transparent', transform: 'scale(0.98)' },
+    disabled: { background: 'transparent', color: '#C4C4C4', border: '1.5px solid transparent', opacity: 0.4, cursor: 'not-allowed' },
   },
   destructive: {
-    default:  { background: '#F0F0F0', color: '#DC2626', border: '1.5px solid #0A0A0A' },
+    default:  { background: '#FEF2F2', color: '#DC2626', border: '1.5px solid #DC2626' },
     hover:    { background: '#DC2626', color: '#FFFFFF', border: '1.5px solid #DC2626' },
     active:   { background: '#B91C1C', color: '#FFFFFF', border: '1.5px solid #B91C1C', transform: 'scale(0.98)' },
-    disabled: { opacity: 0.3, cursor: 'not-allowed' },
+    disabled: { background: '#FEF2F2', color: '#DC2626', border: '1.5px solid #DC2626', opacity: 0.3, cursor: 'not-allowed' },
   },
   'accent-cyan': {
     default:  { background: '#65F7FF', color: '#0A0A0A', border: '1.5px solid #0A0A0A' },
@@ -74,8 +82,8 @@ const VARIANTS: Record<BtnVariant, {
 };
 
 const SIZE: Record<BtnSize, React.CSSProperties> = {
-  md: { height: 48, padding: '0 20px', fontSize: '15px', fontWeight: 700, borderRadius: '16px' },
-  sm: { height: 36, padding: '0 16px', fontSize: '12px', fontWeight: 700, borderRadius: '12px' },
+  md: { height: 48, padding: '0 20px', fontSize: T.base.fontSize, fontWeight: 700, borderRadius: '16px' },
+  sm: { height: 36, padding: '0 16px', fontSize: T.pill.fontSize, fontWeight: 700, borderRadius: '12px' },
 };
 
 /* ─── Component ─────────────────────────────────────────── */

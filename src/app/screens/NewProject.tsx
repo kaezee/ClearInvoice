@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { X, ChevronDown } from 'lucide-react';
+import { DarkNavBtn } from '../components/ui/CircleIconBtn';
 import { useApp } from '../store';
 import { C, T, R } from '../tokens';
 import { Btn } from '../components/ui/Btn';
+import { NumberInput } from '../components/ui/NumberInput';
+import { ServicesSection, ServiceItem } from '../components/ui/ServicesSection';
+import { Contact } from '../types';
 
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'INR', 'AUD', 'CAD'];
 
@@ -11,11 +15,6 @@ const DUE_QUICK: { label: string; days: number }[] = [
   { label: '7 days',  days: 7  },
   { label: '14 days', days: 14 },
   { label: '30 days', days: 30 },
-];
-
-const CATEGORIES = [
-  'Branding', 'Web', 'App', 'Motion', 'UI/UX',
-  'Illustration', 'Strategy', 'Print', 'Copy', 'Photo',
 ];
 
 const currencySymbol = (c: string) =>
@@ -62,75 +61,88 @@ const baseInput: React.CSSProperties = {
   width: '100%', height: 44,
   background: C.white, border: `1px solid ${C.border}`,
   borderRadius: R.md, padding: '0 12px',
-  fontSize: '14px', outline: 'none', color: C.black,
+  fontSize: T.input.fontSize, outline: 'none', color: C.black,
   fontFamily: 'inherit', boxSizing: 'border-box',
   transition: 'border-color 150ms',
 };
 
 export default function NewProject() {
-  const { addProject, invoiceDefaults } = useApp();
+  const { addProject, invoiceDefaults, updateInvoiceDefaults } = useApp();
   const navigate = useNavigate();
 
   // ── Client ────────────────────────────────────────
-  const [clientName, setClientName]     = useState('');
-  const [clientEmail, setClientEmail]   = useState('');
-  const [contactPerson, setContact]     = useState('');
+  const [clientName, setClientName]         = useState('');
+  const [primaryContactName, setPrimaryContactName] = useState('');
+  const [primaryContactEmail, setPrimaryContactEmail] = useState('');
+  const [additionalContacts, setAdditionalContacts] = useState<Contact[]>([]);
 
-  // ── Project ───────────────────────────────────────
-  const [type, setType]                 = useState('');
-  const [categories, setCategories]     = useState<string[]>([]);
-  const [showRateCard, setShowRateCard] = useState(false);
+  // ── Services ──────────────────────────────────────
+  const [services, setServices]       = useState<ServiceItem[]>([]);
 
   // ── Money ─────────────────────────────────────────
-  const [amount, setAmount]             = useState('');
-  const [currency, setCurrency]         = useState(invoiceDefaults.defaultCurrency || 'GBP');
-  const [deposit, setDeposit]           = useState('');
+  const [amount, setAmount]           = useState('');
+  const [amountIsCustom, setAmountIsCustom] = useState(false);
+  const [currency, setCurrency]       = useState(invoiceDefaults.defaultCurrency || 'GBP');
+  const [deposit, setDeposit]         = useState('');
 
   // ── Dates ─────────────────────────────────────────
-  const [startDate, setStartDate]       = useState(new Date().toISOString().split('T')[0]);
-  const [dueDate, setDueDate]           = useState('');
+  const [startDate, setStartDate]         = useState(new Date().toISOString().split('T')[0]);
+  const [dueDate, setDueDate]             = useState('');
+  const [activeDueDays, setActiveDueDays] = useState<number | null>(null);
 
   // ── Notes ─────────────────────────────────────────
-  const [notes, setNotes]               = useState('');
+  const [notes, setNotes]             = useState('');
 
-  // ── UI state ──────────────────────────────────────
-  const [errors, setErrors]             = useState<Record<string, string>>({});
+  // ── Errors ────────────────────────────────────────
+  const [errors, setErrors]           = useState<Record<string, string>>({});
 
-  const isValid = clientName.trim() && type.trim();
+  const isValid = clientName.trim().length > 0 && services.length > 0;
   const sym     = currencySymbol(currency);
+
+  /* Derived: service total to compare against quoted amount */
+  const serviceTotal = services.reduce((sum, s) => sum + s.price, 0);
+  const amountDiffersFromServices =
+    amountIsCustom &&
+    services.length > 0 &&
+    (parseFloat(amount) || 0) !== serviceTotal;
 
   const applyDays = (days: number) => {
     const d = new Date(startDate || Date.now());
     d.setDate(d.getDate() + days);
     setDueDate(d.toISOString().split('T')[0]);
-  };
-
-  const toggleCategory = (cat: string) => {
-    if (categories.includes(cat)) {
-      setCategories(prev => prev.filter(c => c !== cat));
-    } else if (categories.length < 5) {
-      setCategories(prev => [...prev, cat]);
-    }
+    setActiveDueDays(days);
   };
 
   const validate = () => {
     const e: Record<string, string> = {};
     if (!clientName.trim()) e.clientName = 'Client name is required';
-    if (!type.trim())       e.type       = 'Project type is required';
+    if (!services.length)   e.services   = 'At least one service is required';
     if (amount.trim() && Number(amount) < 0) e.amount = 'Enter a valid amount';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
+  const handleAddToRateCard = (name: string, price: number) => {
+    updateInvoiceDefaults({
+      ...invoiceDefaults,
+      rateCard: [...invoiceDefaults.rateCard, { id: `rc-${Date.now()}`, service: name, price }],
+    });
+  };
+
   const handleSave = () => {
     if (!validate()) return;
+    const totalFromServices = services.reduce((sum, s) => sum + s.price, 0);
+    const finalAmount = amount.trim() ? Number(amount) : totalFromServices;
     const id = addProject({
       clientName:    clientName.trim(),
-      clientEmail:   clientEmail.trim() || undefined,
-      contactPerson: contactPerson.trim() || undefined,
-      type:          type.trim(),
-      categories:    categories.length ? categories : undefined,
-      amount:        amount.trim() ? Number(amount) : 0,
+      clientEmail:   primaryContactEmail.trim() || undefined,
+      contactPerson: primaryContactName.trim() || undefined,
+      additionalContacts: additionalContacts.filter(c => c.name.trim()).length > 0
+        ? additionalContacts.filter(c => c.name.trim())
+        : undefined,
+      type:          services[0]?.name || '',
+      services,
+      amount:        finalAmount,
       depositAmount: deposit.trim() ? Number(deposit) : undefined,
       currency,
       startDate,
@@ -151,27 +163,24 @@ export default function NewProject() {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         flexShrink: 0, minHeight: 52,
       }}>
-        <button
-          onClick={() => navigate('/projects')}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.white, minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', padding: 0 }}
-          aria-label="Close"
-        >
-          <X size={20} />
-        </button>
+        <DarkNavBtn onClick={() => navigate('/projects')} ariaLabel="Close">
+          <X size={20} strokeWidth={2} />
+        </DarkNavBtn>
 
         <div style={{ flex: 1 }} />
 
         <button
           onClick={handleSave}
           disabled={!isValid}
+          onMouseEnter={e => { if (isValid) e.currentTarget.style.opacity = '0.65'; }}
+          onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
           style={{
             background: 'none', border: 'none',
             color: isValid ? C.white : 'rgba(255,255,255,0.3)',
             minHeight: 44, padding: '0 4px',
             fontSize: '13px', fontWeight: 600,
             cursor: isValid ? 'pointer' : 'default',
-            letterSpacing: '0',
-            transition: 'color 150ms',
+            transition: 'color 150ms, opacity 150ms',
           }}
         >
           Save
@@ -182,14 +191,16 @@ export default function NewProject() {
       <main style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 0' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 16 }}>
 
-          {/* ── CLIENT ──────────────────────────────── */}
+          {/* ── 1. CLIENT DETAILS ───────────────────── */}
           <FormSection>
-            {/* Client name — hero */}
             <Field label="Client name" error={errors.clientName}>
               <input
                 className="ci"
                 value={clientName}
-                onChange={e => { setClientName(e.target.value); if (errors.clientName) setErrors(p => ({ ...p, clientName: '' })); }}
+                onChange={e => {
+                  setClientName(e.target.value);
+                  if (errors.clientName) setErrors(p => ({ ...p, clientName: '' }));
+                }}
                 placeholder="e.g. Acme Corp"
                 style={{
                   ...baseInput,
@@ -201,195 +212,289 @@ export default function NewProject() {
               />
             </Field>
 
-            <Field label="Client email" optional helper="Used to pre-fill share sheet when sending quotes and invoices">
-              <input
-                className="ci"
-                type="email"
-                value={clientEmail}
-                onChange={e => setClientEmail(e.target.value)}
-                placeholder="e.g. hello@acmecorp.com"
-                style={{ ...baseInput }}
-              />
-            </Field>
+            {/* ── CONTACTS ─────────────────────────── */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 10 }}>
+                <label style={{ fontSize: '10px', fontWeight: 600, color: C.muted, letterSpacing: '0.08em', textTransform: 'uppercase' as const }}>
+                  Contacts
+                </label>
+              </div>
 
-            <Field label="Contact person" optional helper="If client is a company">
-              <input
-                className="ci"
-                value={contactPerson}
-                onChange={e => setContact(e.target.value)}
-                placeholder="e.g. Sarah Johnson"
-                style={{ ...baseInput }}
-              />
-            </Field>
-          </FormSection>
+              {/* Primary contact */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, flex: 1 }}>
+                  <input
+                    className="ci"
+                    value={primaryContactName}
+                    onChange={e => setPrimaryContactName(e.target.value)}
+                    placeholder="Contact name"
+                    style={{ ...baseInput }}
+                  />
+                  <input
+                    className="ci"
+                    type="email"
+                    value={primaryContactEmail}
+                    onChange={e => setPrimaryContactEmail(e.target.value)}
+                    placeholder="Contact email"
+                    style={{ ...baseInput }}
+                  />
+                </div>
+                {/* Spacer to match X button width on additional rows */}
+                <div style={{ width: 28, flexShrink: 0 }} />
+              </div>
 
-          {/* ── PROJECT ─────────────────────────────── */}
-          <FormSection>
-            <Field label="Project type" error={errors.type}>
-              <div style={{ position: 'relative' }}>
-                <input
-                  className="ci"
-                  value={type}
-                  onChange={e => { setType(e.target.value); if (errors.type) setErrors(p => ({ ...p, type: '' })); }}
-                  placeholder="e.g. Brand identity"
-                  onFocus={() => setShowRateCard(true)}
-                  onBlur={() => setTimeout(() => setShowRateCard(false), 200)}
-                  style={{ ...baseInput, border: `1px solid ${errors.type ? C.danger : C.border}` }}
-                  aria-invalid={!!errors.type}
-                />
-                {showRateCard && invoiceDefaults.rateCard.length > 0 && (
-                  <div style={{
-                    position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4,
-                    background: C.white, border: `1px solid ${C.border}`,
-                    borderRadius: R.md, boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                    overflow: 'hidden', zIndex: 10,
-                  }}>
-                    {invoiceDefaults.rateCard.map(item => (
-                      <button
-                        key={item.id}
-                        onMouseDown={() => {
-                          setType(item.service);
-                          setAmount(String(item.price));
-                          setShowRateCard(false);
-                          setErrors(p => ({ ...p, type: '', amount: '' }));
-                        }}
-                        style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', minHeight: 44, border: 'none', borderBottom: `1px solid ${C.border}`, background: 'transparent', cursor: 'pointer', textAlign: 'left' }}
-                        onMouseEnter={e => e.currentTarget.style.background = C.surface}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      >
-                        <span style={{ fontSize: '13px', fontWeight: 500, color: C.black }}>{item.service}</span>
-                        <span style={{ fontSize: '13px', color: C.muted }}>{sym}{item.price.toLocaleString()}</span>
-                      </button>
-                    ))}
+              {/* Additional contacts */}
+              {additionalContacts.map((contact, idx) => (
+                <div key={contact.id} style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: 8 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, flex: 1 }}>
+                    <input
+                      className="ci"
+                      value={contact.name}
+                      onChange={e => {
+                        const updated = [...additionalContacts];
+                        updated[idx] = { ...contact, name: e.target.value };
+                        setAdditionalContacts(updated);
+                      }}
+                      placeholder="Contact name"
+                      style={{ ...baseInput }}
+                    />
+                    <input
+                      className="ci"
+                      type="email"
+                      value={contact.email || ''}
+                      onChange={e => {
+                        const updated = [...additionalContacts];
+                        updated[idx] = { ...contact, email: e.target.value };
+                        setAdditionalContacts(updated);
+                      }}
+                      placeholder="Contact email"
+                      style={{ ...baseInput }}
+                    />
+                  </div>
+                  <div style={{ width: 28, flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
                     <button
-                      onMouseDown={() => setShowRateCard(false)}
-                      style={{ width: '100%', padding: '10px 12px', minHeight: 40, border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', fontSize: '13px', color: C.muted }}
+                      onClick={() => setAdditionalContacts(additionalContacts.filter(c => c.id !== contact.id))}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: C.disabled, padding: 4, display: 'flex', alignItems: 'center',
+                        transition: 'color 150ms',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.color = C.danger)}
+                      onMouseLeave={e => (e.currentTarget.style.color = C.disabled)}
+                      aria-label="Remove contact"
                     >
-                      None of these
+                      <X size={16} />
                     </button>
                   </div>
-                )}
-              </div>
-            </Field>
+                </div>
+              ))}
 
-            {/* Categories */}
-            <Field label="Categories" optional helper={`Max 5 · tap to remove${categories.length >= 5 ? ' · limit reached' : ''}`}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-                {CATEGORIES.map(cat => {
-                  const active = categories.includes(cat);
-                  const atMax = categories.length >= 5 && !active;
-                  return (
-                    <button
-                      key={cat}
-                      onClick={() => toggleCategory(cat)}
-                      disabled={atMax}
-                      style={{
-                        padding: '4px 12px',
-                        border: `1.5px solid ${active ? C.black : '#C4C4C4'}`,
-                        borderRadius: 16,
-                        background: active ? C.black : '#F0F0F0',
-                        color: active ? C.white : '#6B6B6B',
-                        cursor: atMax ? 'not-allowed' : 'pointer',
-                        fontSize: '11px', fontWeight: 600,
-                        transition: 'all 120ms',
-                        opacity: atMax ? 0.4 : 1,
-                      }}
-                    >
-                      {cat}
-                    </button>
-                  );
-                })}
-              </div>
-            </Field>
+              {/* Add another contact (max 3 total = primary + 2) */}
+              {additionalContacts.length < 2 ? (
+                <button
+                  onClick={() => setAdditionalContacts([...additionalContacts, { id: `c-${Date.now()}`, name: '', email: '' }])}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    fontSize: '13px', fontWeight: 500, color: C.muted,
+                    padding: '4px 0', display: 'flex', alignItems: 'center', gap: 4,
+                  }}
+                >
+                  + Add another contact
+                </button>
+              ) : (
+                <p style={{ fontSize: '10px', color: C.disabled, margin: 0 }}>Max 3 contacts</p>
+              )}
+            </div>
           </FormSection>
 
-          {/* ── MONEY ───────────────────────────────── */}
+          {/* ── 2. PROJECT ──────────────────────────── */}
           <FormSection>
+
+            {/* Services */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
+                <label style={{
+                  fontSize: '10px', fontWeight: 600, color: C.muted,
+                  letterSpacing: '0.08em', textTransform: 'uppercase',
+                }}>
+                  Services
+                </label>
+              </div>
+              <p style={{ fontSize: T.xs.fontSize, color: C.muted, margin: '0 0 12px', lineHeight: 1.5 }}>
+                Tap to add from your services
+              </p>
+              <ServicesSection
+                services={services}
+                onChange={svcs => {
+                  setServices(svcs);
+                  // Auto-recalculate quoted amount unless user has overridden it
+                  if (!amountIsCustom) {
+                    const total = svcs.reduce((sum, s) => sum + s.price, 0);
+                    setAmount(total > 0 ? String(total) : '');
+                  }
+                  if (errors.services) setErrors(p => ({ ...p, services: '' }));
+                }}
+                rateCard={invoiceDefaults.rateCard}
+                currencySymbol={sym}
+                onAddToRateCard={handleAddToRateCard}
+                onNavigateToRateCard={() => navigate('/settings/invoice-defaults')}
+              />
+              {errors.services && (
+                <p style={{ fontSize: '11px', color: C.danger, margin: '6px 0 0' }}>
+                  {errors.services}
+                </p>
+              )}
+            </div>
+
             {/* Quoted amount + Currency */}
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
               <div style={{ flex: 1 }}>
-                <Field label="Quoted amount" error={errors.amount}>
-                  <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: '14px', color: C.muted, pointerEvents: 'none' }}>{sym}</span>
-                    <input
-                      className="ci"
-                      type="number" value={amount}
-                      onChange={e => { setAmount(e.target.value); if (errors.amount) setErrors(p => ({ ...p, amount: '' })); }}
-                      placeholder="0"
-                      style={{ ...baseInput, paddingLeft: 26, border: `1px solid ${errors.amount ? C.danger : C.border}` }}
-                    />
-                  </div>
+                <Field label="Quoted amount" optional error={errors.amount}>
+                  <NumberInput
+                    prefix={sym}
+                    value={amount}
+                    onChange={val => {
+                      setAmount(val);
+                      // Mark as custom if it differs from service total
+                      const total = services.reduce((sum, s) => sum + s.price, 0);
+                      setAmountIsCustom(services.length > 0 && (parseFloat(val) || 0) !== total);
+                      if (errors.amount) setErrors(p => ({ ...p, amount: '' }));
+                    }}
+                    placeholder="0"
+                    min={0}
+                    style={{ height: 44, border: `1px solid ${errors.amount ? C.danger : C.border}` }}
+                  />
+                  {amountDiffersFromServices && (
+                    <div style={{ marginTop: 5, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: T.xs.fontSize, color: C.amberText, lineHeight: 1.4 }}>
+                        Custom amount — differs from service total ({sym}{serviceTotal.toLocaleString()})
+                      </span>
+                      <button
+                        onClick={() => { setAmount(String(serviceTotal)); setAmountIsCustom(false); }}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          fontSize: T.xs.fontSize, color: C.muted, padding: 0,
+                          fontFamily: 'inherit', textDecoration: 'underline',
+                        }}
+                      >
+                        Reset to service total
+                      </button>
+                    </div>
+                  )}
                 </Field>
               </div>
               <div style={{ width: 88 }}>
-                <label style={{ fontSize: '10px', fontWeight: 600, color: C.muted, letterSpacing: '0.08em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Currency</label>
+                <label style={{
+                  fontSize: '10px', fontWeight: 600, color: C.muted,
+                  letterSpacing: '0.08em', textTransform: 'uppercase',
+                  display: 'block', marginBottom: 6,
+                }}>
+                  Currency
+                </label>
                 <div style={{ position: 'relative' }}>
                   <select
                     className="ci"
-                    value={currency} onChange={e => setCurrency(e.target.value)}
-                    style={{ ...baseInput, paddingRight: 28, appearance: 'none', cursor: 'pointer' }}>
+                    value={currency}
+                    onChange={e => setCurrency(e.target.value)}
+                    style={{ ...baseInput, paddingRight: 28, appearance: 'none', cursor: 'pointer' }}
+                  >
                     {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
-                  <ChevronDown size={14} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: C.muted }} />
+                  <ChevronDown size={14} style={{
+                    position: 'absolute', right: 10, top: '50%',
+                    transform: 'translateY(-50%)', pointerEvents: 'none', color: C.muted,
+                  }} />
                 </div>
               </div>
             </div>
 
             {/* Deposit */}
-            <Field label="Deposit required" optional helper="Shown on quote if applicable">
-              <div style={{ position: 'relative' }}>
-                <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: '14px', color: C.muted, pointerEvents: 'none' }}>{sym}</span>
-                <input
-                  className="ci"
-                  type="number" value={deposit}
-                  onChange={e => setDeposit(e.target.value)}
-                  placeholder="e.g. 50%"
-                  style={{ ...baseInput, paddingLeft: 26 }}
-                />
-              </div>
+            <Field label="Deposit" optional helper="Shown on quote if applicable">
+              <NumberInput
+                prefix={sym}
+                value={deposit}
+                onChange={val => setDeposit(val)}
+                placeholder="0"
+                min={0}
+                style={{ height: 44 }}
+              />
             </Field>
-          </FormSection>
 
-          {/* ── DATES ───────────────────────────────── */}
-          <FormSection>
+            {/* Start date */}
             <Field label="Start date">
               <input
                 className="ci"
-                type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-                style={baseInput} />
+                type="date"
+                value={startDate}
+                onChange={e => setStartDate(e.target.value)}
+                style={baseInput}
+              />
             </Field>
 
+            {/* Due date */}
             <Field label="Due date" optional>
               <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                {DUE_QUICK.map(q => (
-                  <button key={q.label} onClick={() => applyDays(q.days)}
-                    style={{ padding: '4px 11px', border: `1.5px solid ${C.black}`, borderRadius: R.xl, background: C.white, cursor: 'pointer', fontSize: '11px', fontWeight: 700, color: C.black, transition: 'background 120ms' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = C.surface; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = C.white; }}
-                  >
-                    {q.label}
-                  </button>
-                ))}
+                {DUE_QUICK.map(q => {
+                  const isActive = activeDueDays === q.days;
+                  return (
+                    <button
+                      key={q.label}
+                      onClick={() => applyDays(q.days)}
+                      style={{
+                        padding: '4px 11px',
+                        border: `1.5px solid ${isActive ? C.black : C.border}`,
+                        borderRadius: R.xl,
+                        background: isActive ? C.black : C.white,
+                        cursor: 'pointer',
+                        fontSize: '11px', fontWeight: 600,
+                        color: isActive ? C.white : C.muted,
+                        transition: 'border-color 120ms, color 120ms, background 120ms',
+                      }}
+                      onMouseEnter={e => {
+                        if (!isActive) {
+                          e.currentTarget.style.borderColor = C.black;
+                          e.currentTarget.style.color = C.black;
+                        }
+                      }}
+                      onMouseLeave={e => {
+                        if (!isActive) {
+                          e.currentTarget.style.borderColor = C.border;
+                          e.currentTarget.style.color = C.muted;
+                        }
+                      }}
+                    >
+                      {q.label}
+                    </button>
+                  );
+                })}
               </div>
               <input
                 className="ci"
-                type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
-                style={baseInput} />
-              <p style={{ fontSize: '11px', color: C.muted, margin: '4px 0 0' }}>Days after invoice is sent</p>
+                type="date"
+                value={dueDate}
+                onChange={e => setDueDate(e.target.value)}
+                style={baseInput}
+              />
+              <p style={{ fontSize: '11px', color: C.muted, margin: '4px 0 0' }}>
+                Days after invoice is sent
+              </p>
             </Field>
-          </FormSection>
 
-          {/* ── NOTES ───────────────────────────────── */}
-          <FormSection>
+            {/* Notes */}
             <Field label="Notes" optional>
               <textarea
                 className="ci"
-                value={notes} onChange={e => setNotes(e.target.value)}
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
                 placeholder="Project scope, deliverables, important context..."
                 rows={3}
-                style={{ ...baseInput, height: 'auto', padding: '10px 12px', resize: 'none', lineHeight: 1.6 } as React.CSSProperties}
+                style={{
+                  ...baseInput, height: 'auto',
+                  padding: '10px 12px', resize: 'none', lineHeight: 1.6,
+                } as React.CSSProperties}
               />
             </Field>
+
           </FormSection>
 
         </div>
@@ -407,7 +512,7 @@ export default function NewProject() {
           onClick={handleSave}
           style={{ height: 50 }}
         >
-          Create project
+          Create project →
         </Btn>
       </div>
     </div>

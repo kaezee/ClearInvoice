@@ -8,15 +8,40 @@ export interface InvoiceItem {
   amount: number;
 }
 
+export interface ServiceItem {
+  id: string;
+  name: string;
+  price: number;
+  fromRateCard?: boolean;
+  rateCardId?: string;
+}
+
+/* ── Multiple contacts ───────────────────────────────── */
+export interface Contact {
+  id: string;
+  name: string;
+  email?: string;
+}
+
+/* ── Quote revision history ──────────────────────────── */
+export interface QuoteRevision {
+  quoteNumber: string;    // e.g. "QUO-001"
+  sentAt: string;         // ISO — when this version was sent
+  items: InvoiceItem[];
+  supersededAt: string;   // ISO — when it was replaced
+}
+
 export interface Project {
   id: string;
   clientName: string;
-  clientEmail?: string;         // needed to pre-fill send-quote / send-invoice share sheet
-  contactPerson?: string;       // if client is a company, who do you talk to
+  clientEmail?: string;
+  contactPerson?: string;
+  additionalContacts?: Contact[];   // up to 2 extra contacts
   type: string;
-  categories?: string[];        // pill tags e.g. ['Branding', 'Web']
+  categories?: string[];
+  services?: ServiceItem[];
   amount: number;
-  depositAmount?: number;       // optional deposit e.g. 50% upfront
+  depositAmount?: number;
   currency: string;
   startDate: string;
   dueDate?: string;
@@ -24,13 +49,16 @@ export interface Project {
   status: ProjectStatus;
   invoiceNumber: string;
   invoiceItems: InvoiceItem[];
-  invoiceNotes?: string;
+  quoteNotes?: string;    // notes shown on the client-facing quote page
+  invoiceNotes?: string;  // notes shown on the client-facing invoice page
   createdAt: string;
 
   // Quote tracking (Quoting stage)
   sentAt?: string;
   viewedAt?: string;
   expiryDate?: string;
+  quoteVersion?: number;          // 1-based; increments on each revision
+  quoteRevisions?: QuoteRevision[]; // previous sent versions
 
   // Invoice tracking (Invoiced stage)
   invoiceSentAt?: string;
@@ -38,7 +66,15 @@ export interface Project {
   remindedAt?: string;
   paidAt?: string;
 
+  // Tax (per-invoice override of defaults)
+  taxEnabled?: boolean;
+  taxLabel?: string;    // e.g. "VAT"
+  taxRate?: number;     // e.g. 20
+
   hasSeenInvoiceHint?: boolean;
+
+  // Archived state
+  preArchiveStatus?: ProjectStatus; // status saved before archiving, used for one-tap restore
 }
 
 export interface BrandingSettings {
@@ -63,25 +99,25 @@ export interface CustomField {
 
 export interface InvoiceDefaultsType {
   // ── Your business / legal details ──
-  fullName?: string;            // "Your name" — shown on invoices
-  businessName?: string;        // legal business / trading name
-  addressLine1?: string;        // address fields (individual lines)
+  fullName?: string;
+  businessName?: string;
+  addressLine1?: string;
   addressLine2?: string;
   city?: string;
   postcode?: string;
-  address?: string;             // kept for legacy (textarea fallback)
-  businessEmail?: string;       // email shown on invoice
-  phone?: string;               // optional
-  regNumber?: string;           // VAT reg / company reg number
+  address?: string;
+  businessEmail?: string;
+  phone?: string;
+  regNumber?: string;
 
   // ── Numbering ──
-  invoicePrefix?: string;       // default "INV" → INV-001
-  quotePrefix?: string;         // default "QUO" → QUO-001
-  startingNumber?: number;      // default 1
+  invoicePrefix?: string;
+  quotePrefix?: string;
+  startingNumber?: number;
 
   // ── Quote defaults ──
-  defaultQuoteExpiry?: number;  // 7 | 14 | 30 days
-  defaultQuoteNotes?: string;   // pre-fill quote notes
+  defaultQuoteExpiry?: number;
+  defaultQuoteNotes?: string;
 
   // ── Rate card & fields ──
   customFields: CustomField[];
@@ -91,4 +127,9 @@ export interface InvoiceDefaultsType {
   defaultTerms: PaymentTerms;
   defaultCurrency: string;
   paymentNotes: string;
+
+  // ── Tax defaults ──
+  taxEnabled?: boolean;
+  taxLabel?: string;    // e.g. "VAT"
+  taxRate?: number;     // e.g. 20
 }

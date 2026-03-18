@@ -8,6 +8,7 @@ export const C = {
   borderStrong: '#B0B8C8',
   muted:        '#7A8099',   // secondary text (cool blue-grey, AA on white)
   hint:         '#7A8099',
+  disabled:     '#C4C4C4',   // locked fields, placeholder icons, empty states
   danger:       '#DC2626',
   dangerLight:  '#FEF2F2',
   dangerText:   '#991B1B',
@@ -19,13 +20,15 @@ export const C = {
   cleared:      '#4DFF91',   // Cleared
   archived:     '#E8E8E8',   // Archived (neutral)
 
-  /* Semantic shorthands still used in a few places */
+  /* Semantic shorthands */
   green:        '#16A34A',
   greenLight:   '#DCFCE7',
   greenText:    '#166534',
   yellow:       '#FFE24B',   // same as quoting — overdue accent
   yellowText:   '#B45309',
   yellowLight:  '#FFFBEB',
+  amberText:    '#7A5000',   // overdue dates, expired labels, warning text
+  teal:         '#00A3B5',   // "Viewed Xh ago" modifier state
 
   /* Kept for any remaining violet usages (branding swatch, etc.) */
   violet:       '#7C3AED',
@@ -45,9 +48,14 @@ export const STATUS_FILL: Record<string, string> = {
 /* ── Typography ───────────────────────────────────────── */
 export const T = {
   xs:    { fontSize: '11px', lineHeight: 1.5,  letterSpacing: '0.02em' },
+  pill:  { fontSize: '12px', lineHeight: 1.4,  letterSpacing: '0.01em' },
   sm:    { fontSize: '13px', lineHeight: 1.6,  letterSpacing: '0.01em' },
+  input: { fontSize: '14px', lineHeight: 1.5,  letterSpacing: '0' },
   base:  { fontSize: '15px', lineHeight: 1.6,  letterSpacing: '0' },
+  md:    { fontSize: '16px', lineHeight: 1.4,  letterSpacing: '0' },
+  title: { fontSize: '17px', lineHeight: 1.3,  letterSpacing: '-0.01em' },
   lg:    { fontSize: '18px', lineHeight: 1.4,  letterSpacing: '-0.01em' },
+  avatar:{ fontSize: '20px', lineHeight: 1,    letterSpacing: '0' },
   xl:    { fontSize: '24px', lineHeight: 1.2,  letterSpacing: '-0.02em' },
   xl2:   { fontSize: '32px', lineHeight: 1.1,  letterSpacing: '-0.03em' },
   label: { fontSize: '10px', fontWeight: 600 as const, letterSpacing: '0.08em', textTransform: 'uppercase' as const, lineHeight: 1.5 },
